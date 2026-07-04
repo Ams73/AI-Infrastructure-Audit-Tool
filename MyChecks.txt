@@ -1,0 +1,45 @@
+System identity & inventory
+OS/kernel version and support status — uname -a, cat /etc/os-release, check EOL date against vendor lifecycle
+Uptime and last reboot reason — uptime, last reboot, journalctl -b -1 -p err
+Hardware/virtualization type and resource allocation — dmidecode -s system-product-name, lscpu, free -h, lsblk
+
+Users, auth, and access control
+4. Accounts with UID 0 or empty passwords — awk -F: '$3==0{print $1}' /etc/passwd, awk -F: '($2==""){print $1}' /etc/shadow
+5. Sudoers config for overly broad rules — visudo -c, review /etc/sudoers.d/* for NOPASSWD:ALL
+6. Stale/orphaned accounts and last login activity — lastlog, compare /etc/passwd against HR/AD source of truth
+7. Password policy enforcement — /etc/login.defs (PASS_MAX_DAYS etc.), chage -l <user> for key accounts
+8. SSH config hardening — /etc/ssh/sshd_config: PermitRootLogin, PasswordAuthentication, Protocol, allowed ciphers
+9. Authorized keys sprawl — find all ~/.ssh/authorized_keys and check for unexpected entries
+10. PAM configuration — /etc/pam.d/* for weak modules, lockout policy (pam_tally2/pam_faillock)
+
+Filesystem & permissions
+11. World-writable files, especially outside /tmp — find / -xdev -perm -0002 -type f
+12. SUID/SGID binaries audit against a known-good baseline — find / -perm /6000 -type f
+13. Unowned files (deleted user/group still referenced) — find / -xdev -nouser -o -nogroup
+14. Sensitive file permissions — /etc/shadow, /etc/passwd, /etc/gshadow modes and ownership
+15. Mount options — check for noexec/nosuid/nodev on /tmp, /var/tmp, /dev/shm — mount | grep -E 'tmp|shm'
+16. Disk usage and inode exhaustion risk — df -h, df -i
+
+Network exposure
+17. Listening services and owning processes — ss -tulnp
+18. Firewall/nftables/iptables rules vs. intended policy — iptables -L -n -v or nft list ruleset
+19. Unnecessary network services enabled — check for telnet, rsh, NFS exports if not needed
+20. DNS resolution and hosts file tampering — /etc/resolv.conf, /etc/hosts, /etc/nsswitch.conf
+
+Services, processes, and packages
+21. Enabled services vs. required baseline — systemctl list-unit-files --state=enabled
+22. Processes running as root that don't need to — ps aux | awk '$1=="root"'
+23. Installed package integrity — rpm -Va or dpkg --verify, flag modified binaries in bin/sbin
+24. Patch/update status and pending security errata — yum updateinfo list security / apt list --upgradable, check unattended-upgrades config
+
+Scheduled tasks & persistence mechanisms
+25. Cron jobs across all users and system crontabs — /etc/crontab, /etc/cron.d/*, crontab -l -u <user> for every user
+26. Systemd timers — systemctl list-timers --all
+27. Startup persistence spots attackers favor — /etc/rc.local, /etc/profile.d/*, ld.so.preload, systemd drop-ins
+
+Logging & auditing
+28. Log rotation and retention actually working — logrotate --debug /etc/logrotate.conf, check /var/log sizes/dates
+29. auditd rules and coverage (if compliance-driven) — auditctl -l, ausearch spot checks
+30. Centralized log shipping health — verify rsyslog/journald forwarding is actually delivering, not just configured
+
+A few notes on how I'd sequence this in practice: I'd run 1–3 first for context, then jump to 17–20 (network) and 11–16 (filesystem) since those catch the highest-severity findings fastest, and leave 25–27 (persistence) for last since they take the most manual judgment to separate legitimate jobs from suspicious ones.
