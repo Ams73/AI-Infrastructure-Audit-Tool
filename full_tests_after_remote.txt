@@ -1,0 +1,36 @@
+test_cli_runs_with_default_settings (test_cli_flow.CliFlowTests) ... ok
+test_build_checks_from_config (test_engine.AuditEngineTests) ... ok
+test_default_checks_include_linux_and_windows_checks (test_engine.AuditEngineTests) ... ok
+test_engine_runs_checks_and_returns_findings (test_engine.AuditEngineTests) ... ok
+test_build_registry_contains_linux_and_windows_checks (test_registry.RegistryTests) ... ok
+test_registry_registers_and_filters_checks (test_registry.RegistryTests) ... ok
+test_linux_executor_returns_placeholder_when_ssh_unavailable (test_remote.RemoteExecutorTests) ... ok
+test_windows_executor_returns_placeholder (test_remote.RemoteExecutorTests) ... FAIL
+test_linux_command_runner_uses_ssh_command (test_remote_execution.RemoteExecutionTests) ... ok
+test_windows_command_runner_returns_placeholder_message (test_remote_execution.RemoteExecutionTests) ... FAIL
+test_json_export_contains_findings (test_reports.ReportTests) ... ok
+test_markdown_export_writes_file (test_reports.ReportTests) ... ok
+test_scorer_counts_findings_and_severity (test_scoring.ScoringTests) ... ok
+test_homepage_loads (test_web_app.WebAppTests) ... ok
+test_run_audit_endpoint (test_web_app.WebAppTests) ... ok
+
+======================================================================
+FAIL: test_windows_executor_returns_placeholder (test_remote.RemoteExecutorTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "c:\VScode_Projects\AI-Infrastructure-Audit-Tool\tests\test_remote.py", line 15, in test_windows_executor_returns_placeholder
+    self.assertIn("windows", output.lower())
+AssertionError: 'windows' not found in 'winrm error: auth method plaintext requires a username'
+
+======================================================================
+FAIL: test_windows_command_runner_returns_placeholder_message (test_remote_execution.RemoteExecutionTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "c:\VScode_Projects\AI-Infrastructure-Audit-Tool\tests\test_remote_execution.py", line 15, in test_windows_command_runner_returns_placeholder_message
+    self.assertIn("windows", result.lower())
+AssertionError: 'windows' not found in 'winrm error: auth method plaintext requires a username'
+
+----------------------------------------------------------------------
+Ran 15 tests in 49.667s
+
+FAILED (failures=2)

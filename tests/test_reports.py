@@ -12,7 +12,8 @@ class ReportTests(unittest.TestCase):
         findings = [Finding(host="a", platform="linux", name="SSH", status="passed", severity="high", description="ok")]
         rendered = export_findings(findings, output_format="json")
         payload = json.loads(rendered)
-        self.assertEqual(payload[0]["name"], "SSH")
+        self.assertIn("summary", payload)
+        self.assertEqual(payload["findings"][0]["name"], "SSH")
 
     def test_markdown_export_writes_file(self):
         findings = [Finding(host="a", platform="windows", name="Updates", status="warning", severity="high", description="pending")]

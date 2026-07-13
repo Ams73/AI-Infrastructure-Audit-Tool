@@ -1,0 +1,16 @@
+{
+  "checks": [
+    {
+      "name": "SSH hardening review",
+      "platform": "linux",
+      "description": "Ensure SSH is configured securely.",
+      "severity": "high"
+    },
+    {
+      "name": "Firewall profile status review",
+      "platform": "windows",
+      "description": "Ensure firewall profiles are enabled.",
+      "severity": "medium"
+    }
+  ]
+}

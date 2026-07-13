@@ -1,1 +1,2 @@
-# No external dependencies required for the initial scaffold.
+paramiko>=2.11.0
+pywinrm>=0.4.2

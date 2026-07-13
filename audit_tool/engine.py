@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
-from typing import List
+from pathlib import Path
+from typing import List, Optional
 
 
 @dataclass
@@ -33,65 +35,45 @@ class Check:
 
 
 class AuditEngine:
-    def __init__(self, checks: List[Check]):
+    def __init__(self, checks: List[Check], remote_executor: Optional[object] = None):
         self.checks = checks
+        self.remote_executor = remote_executor
 
     def run(self, hostname: str, platform: str) -> List[Finding]:
         findings = []
         for check in self.checks:
             if check.platform == platform:
-                findings.append(check.run(hostname))
+                finding = check.run(hostname)
+                if self.remote_executor is not None:
+                    finding.description = f"{finding.description} | remote output: {self.remote_executor.run_command('echo connected')}"
+                findings.append(finding)
         return findings
 
 
 def build_default_checks() -> List[Check]:
+    from audit_tool.registry import build_registry
+
+    return build_registry().get_all()
+
+
+def build_checks_from_config(config_path: str | None = None) -> List[Check]:
+    if not config_path:
+        return build_default_checks()
+
+    path = Path(config_path)
+    if not path.exists():
+        return build_default_checks()
+
+    with path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+
+    checks = payload.get("checks", [])
     return [
         Check(
-            name="OS version and distribution verification",
-            platform="linux",
-            description="Verify the operating system version and distribution.",
-            severity="high",
-        ),
-        Check(
-            name="SSH hardening review",
-            platform="linux",
-            description="Validate SSH configuration hardening settings.",
-            severity="high",
-        ),
-        Check(
-            name="Sudoers misconfiguration review",
-            platform="linux",
-            description="Check for unsafe sudoers rules and NOPASSWD usage.",
-            severity="high",
-        ),
-        Check(
-            name="World-writable files review",
-            platform="linux",
-            description="Identify world-writable files and directories that may be risky.",
-            severity="medium",
-        ),
-        Check(
-            name="Pending security updates review",
-            platform="windows",
-            description="Review pending security updates on the host.",
-            severity="high",
-        ),
-        Check(
-            name="Firewall profile status review",
-            platform="windows",
-            description="Verify firewall profiles and enabled protections.",
-            severity="medium",
-        ),
-        Check(
-            name="Local administrator account review",
-            platform="windows",
-            description="Review local administrator accounts and privilege exposure.",
-            severity="high",
-        ),
-        Check(
-            name="BitLocker protection review",
-            platform="windows",
-            description="Verify BitLocker protection is enabled for relevant drives.",
-            severity="medium",
-        ),
+            name=item.get("name", "Unnamed check"),
+            platform=item.get("platform", "linux"),
+            description=item.get("description", ""),
+            severity=item.get("severity", "medium"),
+        )
+        for item in checks
     ]
