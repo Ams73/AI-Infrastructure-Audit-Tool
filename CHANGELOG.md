@@ -1,8 +1,10 @@
 # Changelog
 
-## 0.1.0 - Unreleased
+## 0.1.0 - 2026-07-16
 
-- Prototype audit engine, CLI, and web UI
-- Report export (text/json/markdown)
-- Remote execution scaffolding; added Paramiko/WinRM support for live execution
-- Tests and CI workflow
+- Added a Python audit engine with CLI and browser UI
+- Export reports in text, JSON, and Markdown with score summaries
+- Added configurable check definitions and a reusable registry
+- Added real remote execution support via Paramiko SSH and WinRM
+- Added packaging metadata, wheel and source distribution builds
+- Added CI workflow for tests and package build automation

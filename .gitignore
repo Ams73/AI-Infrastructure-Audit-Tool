@@ -1,0 +1,19 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# Distribution/build artifacts
+dist/
+build/
+*.egg
+*.whl
+
+# Test and temporary outputs
+*.log
+*.md.tmp
+
+# IDE/editor files
+.vscode/
+*.swp

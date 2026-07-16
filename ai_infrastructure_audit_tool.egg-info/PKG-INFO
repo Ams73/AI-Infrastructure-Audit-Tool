@@ -1,5 +1,0 @@
-Metadata-Version: 2.4
-Name: ai-infrastructure-audit-tool
-Version: 0.1.0
-Summary: A prototype audit tool for Linux and Windows infrastructure
-Requires-Python: >=3.9
