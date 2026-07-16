@@ -15,32 +15,25 @@ git clone <repository-url>
 cd AI-Infrastructure-Audit-Tool
 ```
 
-## 3. Create a Python virtual environment
+## 3. Install on Windows
 
-```bash
-python -m venv .venv
-```
+### 3.1 Create and activate a virtual environment
 
-## 4. Activate the virtual environment
-
-### Windows PowerShell
+PowerShell:
 
 ```powershell
+python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 ```
 
-### Windows Command Prompt
+Command Prompt:
 
 ```cmd
+python -m venv .venv
 .venv\Scripts\activate.bat
 ```
 
-## 5. Install dependencies
-
-The project has two dependency files:
-
-- `requirements.txt` for core dependencies
-- `requirements_web.txt` for the web UI dependencies
+### 3.2 Install dependencies
 
 ```bash
 python -m pip install --upgrade pip
@@ -48,15 +41,40 @@ python -m pip install -r requirements.txt
 python -m pip install -r requirements_web.txt
 ```
 
-## 6. Install the package in editable mode
+### 3.3 Install the package in editable mode
 
 ```bash
 python -m pip install -e .
 ```
 
-This makes the package available as `audit_tool` while still allowing local code changes.
+This makes the package available as `audit_tool` while still allowing local changes.
 
-## 7. Run the CLI
+## 4. Install on Linux
+
+### 4.1 Create and activate a virtual environment
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
+
+### 4.2 Install dependencies
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install -r requirements_web.txt
+```
+
+### 4.3 Install the package in editable mode
+
+```bash
+python -m pip install -e .
+```
+
+## 5. Run the CLI
+
+The command syntax is the same on Windows and Linux.
 
 ### Default audit run
 
@@ -80,7 +98,9 @@ python run_audit.py --host demo-host --platform linux --format markdown --output
 python run_audit.py --host localhost --platform linux --format text
 ```
 
-## 8. Run the web UI
+## 6. Run the web UI
+
+The web UI launch command is the same on Windows and Linux.
 
 ```bash
 python -m uvicorn web.app:app --reload
@@ -94,9 +114,9 @@ http://127.0.0.1:8000/
 
 Use the web form to start an audit and view results in the browser.
 
-## 9. Run the demo script (Windows)
+## 7. Run the demo script (Windows)
 
-The repository includes a demo batch script:
+The repository includes a Windows demo batch script:
 
 ```cmd
 scripts\run_demo.bat
@@ -104,7 +124,7 @@ scripts\run_demo.bat
 
 This runs a sample audit and writes `demo_report.md`.
 
-## 10. Build release artifacts
+## 8. Build release artifacts
 
 To create distributable packages:
 
@@ -115,7 +135,7 @@ python -m build
 
 Artifacts will be generated in the `dist/` folder.
 
-## 11. Notes
+## 9. Notes
 
 - The tool supports live SSH execution for Linux and WinRM for Windows when credentials are provided.
 - If `ssh` or WinRM connectivity is not available, the tool falls back to placeholder output.
