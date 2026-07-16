@@ -9,6 +9,8 @@ The tool currently provides:
 - a lightweight browser UI for running audits
 - a modular check registry and remote execution foundation with SSH/WinRM support
 
+For a complete install and run walkthrough, see [INSTALL_AND_RUN.md](INSTALL_AND_RUN.md).
+
 ## Install
 
 ```bash

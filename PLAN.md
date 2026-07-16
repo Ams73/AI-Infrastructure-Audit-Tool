@@ -166,3 +166,10 @@ Each audit finding should include:
 2. Choose the implementation language and runtime
 3. Create the first set of checks for one Linux and one Windows target
 4. Validate output format and reporting
+
+## Release Status
+- Release version `0.1.0` prepared on 2026-07-16
+- Wheel and source distribution artifacts generated in `dist/`
+- GitHub release draft created in `GITHUB_RELEASE.md`
+- CI workflow added for tests and package build automation
+- Final release tag: `v0.1.0`
