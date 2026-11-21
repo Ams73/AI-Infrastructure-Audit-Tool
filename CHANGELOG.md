@@ -43,7 +43,9 @@ report schema.
 - The risk score counts failed checks only, so a clean host scores 0.
 - Reports list the findings that need attention first, with evidence and recommendations.
 - The disk check ignores read-only mounts, which are full by design.
-- CI installs the package with its extras and actually runs the tests.
+- CI installs the package with its extras and actually runs the tests, on Python 3.9, 3.12 and
+  3.13 (Linux) and 3.12 (Windows); `ubuntu-latest` no longer provides Python 3.9.
+- New `[dev]` extra with test and build tools.
 
 ### Security
 

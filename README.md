@@ -94,8 +94,11 @@ redact them. Test the evaluator with recorded command output in `tests/fixtures/
 ## Run the tests
 
 ```bash
+python -m pip install -e ".[web,ai,dev]"
 python -m unittest discover
 ```
+
+CI runs the suite on Python 3.9, 3.12 and 3.13 on Linux and 3.12 on Windows.
 
 ## Run the web UI
 

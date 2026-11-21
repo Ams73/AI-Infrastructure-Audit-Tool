@@ -17,6 +17,11 @@ ai = [
     # Python 3.9 resolves to the 0.x SDK line; 1.x requires Python 3.10+.
     "anthropic>=0.125",
 ]
+dev = [
+    # FastAPI's TestClient needs httpx; anthropic 1.x no longer pulls it in.
+    "httpx",
+    "build",
+]
 
 [build-system]
 requires = ["setuptools>=61", "wheel"]

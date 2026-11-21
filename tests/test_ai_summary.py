@@ -11,9 +11,17 @@ from audit_tool.reports import export_findings
 
 try:
     import anthropic
-    import httpx
 except ImportError:  # the [ai] extra is optional
     anthropic = None
+# anthropic 1.x is built on httpx2 and rejects objects from the httpx package;
+# 0.x uses httpx. Use whichever the installed SDK expects for the mock transport.
+try:
+    import httpx2 as httpx
+except ImportError:
+    try:
+        import httpx
+    except ImportError:
+        httpx = None
 
 
 def finding(check_id, status, severity="high", evidence="", accounts=None, host="web01.corp.example.com"):
@@ -184,7 +192,7 @@ class ReportRenderingTests(unittest.TestCase):
         self.assertNotIn("ai_summary", json.loads(export_findings(FINDINGS, "json")))
 
 
-@unittest.skipIf(anthropic is None, "anthropic SDK not installed (pip install .[ai])")
+@unittest.skipIf(anthropic is None or httpx is None, "anthropic SDK not installed (pip install .[ai])")
 class RealSdkTests(unittest.TestCase):
     """Drive the real Anthropic SDK against a mocked HTTP transport, so request
     serialization and response parsing are checked without network access."""
@@ -257,12 +265,21 @@ class RealSdkTests(unittest.TestCase):
             self.assertIn(expected, str(ctx.exception))
 
     def test_missing_credentials(self):
-        clean_env = {k: v for k, v in __import__("os").environ.items() if not k.startswith("ANTHROPIC_")}
-        with mock.patch.dict("os.environ", clean_env, clear=True):
-            client = anthropic.Anthropic(api_key=None, max_retries=0)
-            with self.assertRaises(ai.AISummaryError) as ctx:
-                ai.summarize(FINDINGS, client=client)
-        self.assertIn("no Anthropic API credentials", str(ctx.exception))
+        # SDK lines differ: 0.x fails when the request is built (TypeError), newer
+        # releases may fail when the client is created. Either way it must surface
+        # as an AISummaryError, never as a crash, and must not reach the network.
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as empty_home:
+            clean_env = {k: v for k, v in os.environ.items() if not k.startswith("ANTHROPIC_")}
+            # Point home/config dirs at an empty folder so no stored `ant` profile is found.
+            clean_env.update(HOME=empty_home, USERPROFILE=empty_home, XDG_CONFIG_HOME=empty_home, APPDATA=empty_home)
+            with mock.patch.dict("os.environ", clean_env, clear=True):
+                with self.assertRaises(ai.AISummaryError) as ctx:
+                    ai.summarize(FINDINGS)
+        message = str(ctx.exception)
+        self.assertTrue("credentials" in message or "Anthropic client" in message, message)
 
     def test_network_failure(self):
         def handler(request):
