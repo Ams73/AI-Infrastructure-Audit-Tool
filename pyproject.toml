@@ -1,7 +1,7 @@
 [project]
 name = "ai-infrastructure-audit-tool"
-version = "0.1.0"
-description = "A prototype audit tool for Linux and Windows infrastructure"
+version = "0.2.0.dev0"
+description = "Security and operational audit checks for Linux and Windows servers, with an optional AI summary"
 requires-python = ">=3.9"
 dependencies = [
     "paramiko>=2.11.0",

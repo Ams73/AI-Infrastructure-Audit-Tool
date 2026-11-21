@@ -1,7 +1,6 @@
 @echo off
 setlocal
+rem Editable installs from pyproject.toml need a recent pip.
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m pip install -r requirements_web.txt
-python -m pip install -e .
+python -m pip install -e ".[web,ai]"
 echo Installation complete.

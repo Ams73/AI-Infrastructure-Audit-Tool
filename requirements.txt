@@ -1,2 +1,4 @@
+# Core runtime dependencies. pyproject.toml is the source of truth; prefer
+#   python -m pip install -e ".[web,ai]"
 paramiko>=2.11.0
 pywinrm>=0.4.2
