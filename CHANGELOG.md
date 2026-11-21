@@ -60,6 +60,8 @@ report schema.
 ### Fixed
 
 - `python -m unittest discover` ran 0 tests, so CI never tested anything.
+- The `[web]` extra was missing `python-multipart`, so a fresh install crashed when starting
+  the web UI (newer FastAPI releases no longer install it).
 
 ### Removed
 
