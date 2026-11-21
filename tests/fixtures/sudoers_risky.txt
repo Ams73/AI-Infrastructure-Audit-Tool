@@ -1,0 +1,26 @@
+# file: /etc/sudoers
+Defaults	env_reset
+Defaults	secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Defaults:backup	!authenticate
+
+# User privilege specification
+root	ALL=(ALL:ALL) ALL
+%sudo	ALL=(ALL:ALL) ALL
+# ops	ALL=(ALL) NOPASSWD: ALL   (commented out, must be ignored)
+
+@includedir /etc/sudoers.d
+
+# file: /etc/sudoers.d/90-cloud-init-users
+# Created by cloud-init v. 23.1 on Mon, 02 Oct 2023 10:00:00 +0000
+
+# User rules for ubuntu
+ubuntu ALL=(ALL) NOPASSWD:ALL
+
+# file: /etc/sudoers.d/deploy
+deploy	ALL=(root) NOPASSWD: /usr/bin/systemctl restart app, \
+	/usr/bin/systemctl status app
+jenkins	ALL=(ALL) NOPASSWD: /usr/bin/ls, PASSWD: ALL
+%ops	ALL=(ALL) NOPASSWD: SETENV: ALL
+ansible	ALL=(ALL) NOPASSWD: ALL
+
+# unreadable: /etc/sudoers.d/legacy

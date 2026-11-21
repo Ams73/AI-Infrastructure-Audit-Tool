@@ -1,0 +1,63 @@
+Filesystem     1024-blocks      Used Available Capacity Mounted on
+none               1964424         0   1964424       0% /usr/lib/modules/6.18.58.1-microsoft-standard-WSL2
+/dev/sdb             99148     99148         0     100% /usr/src/linux-headers-6.18.58.1-microsoft-standard-WSL2
+none               1964424         4   1964420       1% /mnt/wsl
+drivers          384014672 286490456  97524216      75% /usr/lib/wsl/drivers
+/dev/sdd        1055762868   2145256 999914140       1% /
+none               1964424        36   1964388       1% /mnt/wslg
+none               1964424         0   1964424       0% /usr/lib/wsl/lib
+rootfs             1959304      3412   1955892       1% /init
+none               1964424       836   1963588       1% /run
+none               1964424         0   1964424       0% /run/lock
+none               1964424         0   1964424       0% /run/shm
+none               1964424        80   1964344       1% /mnt/wslg/versions.txt
+none               1964424        80   1964344       1% /mnt/wslg/doc
+C:\              384014672 286490456  97524216      75% /mnt/c
+snapfuse               128       128         0     100% /snap/bare/5
+snapfuse             75648     75648         0     100% /snap/core22/750
+snapfuse             75648     75648         0     100% /snap/core22/766
+snapfuse             93952     93952         0     100% /snap/gtk-common-themes/1535
+snapfuse             54656     54656         0     100% /snap/snapd/19361
+snapfuse             54656     54656         0     100% /snap/snapd/19457
+snapfuse            154240    154240         0     100% /snap/ubuntu-desktop-installer/1099
+snapfuse            134912    134912         0     100% /snap/ubuntu-desktop-installer/1286
+tmpfs               392884         8    392876       1% /run/user/0
+__INODES__
+Filesystem       Inodes   IUsed    IFree IUse% Mounted on
+none             491106       6   491100    1% /usr/lib/modules/6.18.58.1-microsoft-standard-WSL2
+/dev/sdb           2256    2247        9  100% /usr/src/linux-headers-6.18.58.1-microsoft-standard-WSL2
+none             491106       2   491104    1% /mnt/wsl
+drivers             999 -999001  1000000     - /usr/lib/wsl/drivers
+/dev/sdd       67108864   30046 67078818    1% /
+none             491106      23   491083    1% /mnt/wslg
+none             491106       5   491101    1% /usr/lib/wsl/lib
+rootfs           489826      12   489814    1% /init
+none             491106     569   490537    1% /run
+none             491106       2   491104    1% /run/lock
+none             491106       1   491105    1% /run/shm
+none             491106      54   491052    1% /mnt/wslg/versions.txt
+none             491106      54   491052    1% /mnt/wslg/doc
+C:\                 999 -999001  1000000     - /mnt/c
+snapfuse             29      29        0  100% /snap/bare/5
+snapfuse          14325   14325        0  100% /snap/core22/750
+snapfuse          14325   14325        0  100% /snap/core22/766
+snapfuse          76208   76208        0  100% /snap/gtk-common-themes/1535
+snapfuse            658     658        0  100% /snap/snapd/19361
+snapfuse            658     658        0  100% /snap/snapd/19457
+snapfuse           8306    8306        0  100% /snap/ubuntu-desktop-installer/1099
+snapfuse           8574    8574        0  100% /snap/ubuntu-desktop-installer/1286
+tmpfs             98221      33    98188    1% /run/user/0
+__READONLY__
+/usr/src/linux-headers-6.18.58.1-microsoft-standard-WSL2
+/usr/lib/wsl/drivers
+/mnt/wslg/distro
+/init
+/tmp/.X11-unix
+/snap/bare/5
+/snap/core22/750
+/snap/core22/766
+/snap/gtk-common-themes/1535
+/snap/snapd/19361
+/snap/snapd/19457
+/snap/ubuntu-desktop-installer/1099
+/snap/ubuntu-desktop-installer/1286

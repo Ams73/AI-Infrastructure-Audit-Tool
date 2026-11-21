@@ -1,0 +1,14 @@
+# source: sshd -T
+port 22
+addressfamily any
+listenaddress 0.0.0.0:22
+usepam yes
+logingracetime 120
+x11forwarding no
+permitrootlogin no
+pubkeyauthentication yes
+passwordauthentication no
+kbdinteractiveauthentication no
+permitemptypasswords no
+maxauthtries 4
+ciphers chacha20-poly1305@openssh.com,aes128-ctr,aes192-ctr,aes256-ctr

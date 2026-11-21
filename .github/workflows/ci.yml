@@ -8,22 +8,35 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    name: test (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Oldest supported Python. ubuntu-latest no longer ships 3.9, so pin an older image.
+          # 3.9 also exercises the anthropic 0.x SDK line; newer Pythons get 1.x.
+          - os: ubuntu-24.04
+            python-version: "3.9"
+          - os: ubuntu-latest
+            python-version: "3.12"
+          - os: ubuntu-latest
+            python-version: "3.13"
+          # The tool audits Windows hosts too; run the suite (incl. PowerShell paths) on Windows.
+          - os: windows-latest
+            python-version: "3.12"
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r requirements_web.txt || true
-          pip install -e .
+          python -m pip install -e ".[web,ai,dev]"
       - name: Run tests
-        run: |
-          python -m unittest discover -v
+        run: python -m unittest discover -v
 
   build:
     runs-on: ubuntu-latest
@@ -31,9 +44,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: "3.12"
       - name: Build package
         run: |
           python -m pip install --upgrade build

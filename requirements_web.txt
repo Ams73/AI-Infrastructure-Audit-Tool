@@ -1,2 +1,4 @@
-fastapi==0.111.0
-uvicorn==0.30.1
+# Web UI dependencies (the [web] extra in pyproject.toml).
+fastapi>=0.111.0
+uvicorn>=0.30.1
+python-multipart>=0.0.9

@@ -139,20 +139,24 @@ The tool should aim to cover 60 checks distributed as follows:
 
 ## Data Model
 Each audit finding should include:
+- check ID (stable, e.g. `LNX-SSH-001`)
 - host name
 - platform
 - check name
 - severity
-- status
+- status (`pass`, `warn`, `fail`, `error`, `skipped`)
 - description
 - evidence
 - recommendation
 - timestamp
+- account names found in the evidence (used for redaction)
 
 ## Output Formats
 - Console: summary table and detailed findings
 - Markdown: executive and technical report
 - JSON: structured results for automation
+- Optional AI summary in all three formats: executive summary, overall risk and prioritized
+  remediation plan written by Claude from redacted findings, marked as AI-generated
 
 ## Success Criteria
 - The tool can run against Linux and Windows targets
@@ -161,15 +165,42 @@ Each audit finding should include:
 - Reports are generated in multiple formats
 - Tool is easy to extend with additional checks
 
+## Progress (2026-11-22)
+
+| Phase | Status |
+| --- | --- |
+| 1. Foundation | Done: Python package, CLI, strict JSON config, logging, exit codes |
+| 2. Core audit engine | Done: check framework, local/SSH/WinRM executors, platform detection, scoring |
+| 3. Check library (15 + 15) | In progress: 5 Linux and 5 Windows checks implemented and validated on real hosts |
+| 4. Expansion (remaining 30) | Not started; reporting and export are done |
+| 5. Hardening and packaging | Partly done: 150+ tests in CI, web UI security, optional AI summary |
+
+Implemented checks and the plan items they cover:
+
+| Check ID | Plan items |
+| --- | --- |
+| `LNX-OS-001` | Linux 1 (OS version and distribution, including vendor support/EOL) |
+| `LNX-ACCT-001` | Critical addition: accounts with UID 0 or empty passwords |
+| `LNX-SSH-001` | Linux 4 (root login), 5 (password authentication), part of 6 |
+| `LNX-SUDO-001` | Linux 9 and the critical addition on sudoers NOPASSWD rules |
+| `LNX-DISK-001` | Linux 16 (disk space, plus inode usage) |
+| `WIN-UPD-001` | Windows 2 and 15, approximated by patch age and pending reboot |
+| `WIN-ADM-001` | Windows 5, 16, and the critical additions on empty passwords and the Administrators group |
+| `WIN-FW-001` | Windows 4 |
+| `WIN-DEF-001` | Windows 3 and 21 |
+| `WIN-BL-001` | Windows 11 |
+
 ## Next Steps
-1. Define the initial project structure
-2. Choose the implementation language and runtime
-3. Create the first set of checks for one Linux and one Windows target
-4. Validate output format and reporting
+1. Implement the remaining Phase 3 checks (10 per platform), starting with the remaining
+   critical additions: uptime and last reboot reason on both platforms
+2. Gather facts once per host (distribution, init system, privileges) so checks can skip
+   cleanly when they don't apply
+3. Audit several hosts in one run from an inventory file
+4. Web UI: per-user accounts or SSO, and lockout after failed logins
+5. Move the minimum Python version to 3.11 (3.9 is end of life)
 
 ## Release Status
-- Release version `0.1.0` prepared on 2026-07-16
-- Wheel and source distribution artifacts generated in `dist/`
-- GitHub release draft created in `GITHUB_RELEASE.md`
-- CI workflow added for tests and package build automation
-- Final release tag: `v0.1.0`
+- `v0.1.0` was tagged on 2026-07-16. Its checks were placeholders that always reported
+  `passed`; see the known issues in `CHANGELOG.md`.
+- The next release (currently `0.2.0.dev0`) is described under `Unreleased` in `CHANGELOG.md`.
+  The release process is in `RELEASE.md`.

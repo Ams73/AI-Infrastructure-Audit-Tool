@@ -1,7 +1,7 @@
 [project]
 name = "ai-infrastructure-audit-tool"
-version = "0.1.0"
-description = "A prototype audit tool for Linux and Windows infrastructure"
+version = "0.2.0.dev0"
+description = "Security and operational audit checks for Linux and Windows servers, with an optional AI summary"
 requires-python = ">=3.9"
 dependencies = [
     "paramiko>=2.11.0",
@@ -12,6 +12,17 @@ dependencies = [
 web = [
     "fastapi>=0.111.0",
     "uvicorn>=0.30.1",
+    # Needed for the login/audit form; newer FastAPI releases no longer install it.
+    "python-multipart>=0.0.9",
+]
+ai = [
+    # Python 3.9 resolves to the 0.x SDK line; 1.x requires Python 3.10+.
+    "anthropic>=0.125",
+]
+dev = [
+    # FastAPI's TestClient needs httpx; anthropic 1.x no longer pulls it in.
+    "httpx",
+    "build",
 ]
 
 [build-system]

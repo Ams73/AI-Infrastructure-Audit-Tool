@@ -1,0 +1,1 @@
+[{"MountPoint":"C:","VolumeType":"OperatingSystem","ProtectionStatus":"Off","VolumeStatus":"FullyDecrypted","EncryptionPercentage":0},{"MountPoint":"D:","VolumeType":"Data","ProtectionStatus":"Off","VolumeStatus":"FullyDecrypted","EncryptionPercentage":0},{"MountPoint":"E:","VolumeType":"Data","ProtectionStatus":"On","VolumeStatus":"FullyEncrypted","EncryptionPercentage":100}]
