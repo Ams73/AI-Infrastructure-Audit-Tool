@@ -1,0 +1,1 @@
+[{"Name":"Domain","Enabled":"True","DefaultInboundAction":"NotConfigured"},{"Name":"Private","Enabled":"True","DefaultInboundAction":"Allow"},{"Name":"Public","Enabled":"False","DefaultInboundAction":"Block"}]

@@ -76,27 +76,49 @@ python -m pip install -e .
 
 The command syntax is the same on Windows and Linux.
 
-### Default audit run
+### Audit the local machine
 
 ```bash
-python run_audit.py --host demo-host --platform linux --format markdown --output report.md
+python run_audit.py
 ```
+
+The platform is detected automatically for `localhost`.
+
+### Audit a remote host
+
+```bash
+python run_audit.py --host web01 --platform linux --username auditor --format markdown --output report.md
+python run_audit.py --host win01 --platform windows --username auditor --winrm-https
+```
+
+- Linux hosts are reached over SSH. Host keys must already be in `known_hosts`
+  (connect once with `ssh`, or use `ssh-keyscan`); unknown hosts are rejected.
+- Windows hosts are reached over WinRM and run PowerShell. Use `--winrm-https` where possible.
+- Passwords are read from the `AUDIT_PASSWORD` environment variable, never from arguments.
 
 ### Common CLI options
 
 - `--host`: Target hostname or IP (default: `localhost`)
-- `--platform`: `linux` or `windows`
+- `--platform`: `linux` or `windows` (required for remote hosts)
+- `--transport`: `auto` (default), `local`, `ssh`, or `winrm`
+- `--username`, `--port`, `--key-file`: Remote connection settings
+- `--winrm-transport`: `ntlm` (default), `kerberos`, `credssp`, or `basic` (HTTPS only)
+- `--config`: JSON file with per-check overrides (see `sample_config.json`)
+- `--timeout`: Per-command timeout in seconds (default: 60)
+- `--fail-on`: Lowest severity of failed check that makes the exit code `1` (default: `low`)
 - `--format`: `text`, `json`, or `markdown`
-- `--output`: Path to save the report
-- `--config`: Optional JSON configuration file path
-- `--username`: Optional remote username
-- `--port`: SSH port (default: 22)
+- `--output`: Write the report to a file instead of stdout
+- `--list-checks`: Show all checks and whether they are implemented
+- `-v`: Log progress to stderr
 
-### Example with a local host
+### Exit codes
 
-```bash
-python run_audit.py --host localhost --platform linux --format text
-```
+| Code | Meaning |
+| --- | --- |
+| 0 | No failed checks at or above `--fail-on` |
+| 1 | At least one failed check at or above `--fail-on` |
+| 2 | Invalid arguments or configuration |
+| 3 | No qualifying failures, but some checks could not run (`error`) |
 
 ## 6. Run the web UI
 
@@ -122,7 +144,7 @@ The repository includes a Windows demo batch script:
 scripts\run_demo.bat
 ```
 
-This runs a sample audit and writes `demo_report.md`.
+This audits the local machine and writes `demo_report.md`.
 
 ## 8. Build release artifacts
 
@@ -137,6 +159,6 @@ Artifacts will be generated in the `dist/` folder.
 
 ## 9. Notes
 
-- The tool supports live SSH execution for Linux and WinRM for Windows when credentials are provided.
-- If `ssh` or WinRM connectivity is not available, the tool falls back to placeholder output.
+- If a host cannot be reached, its checks are reported as `error`, never as `pass`.
 - Use `sample_config.json` as a starting point for custom check configuration.
+- The web UI has no authentication yet; keep it bound to localhost.

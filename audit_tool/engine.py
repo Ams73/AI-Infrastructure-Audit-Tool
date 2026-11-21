@@ -1,79 +1,45 @@
 from __future__ import annotations
 
-import json
-from dataclasses import dataclass
-from pathlib import Path
-from typing import List, Optional
+import logging
+from typing import Iterable, List
 
+from audit_tool.checks import Check
+from audit_tool.executors import Executor
+from audit_tool.models import Finding, Status
 
-@dataclass
-class Finding:
-    host: str
-    platform: str
-    name: str
-    status: str
-    severity: str
-    description: str
-
-
-@dataclass
-class Check:
-    name: str
-    platform: str
-    description: str
-    severity: str = "medium"
-
-    def run(self, hostname: str) -> Finding:
-        return Finding(
-            host=hostname,
-            platform=self.platform,
-            name=self.name,
-            status="passed",
-            severity=self.severity,
-            description=self.description,
-        )
+log = logging.getLogger(__name__)
 
 
 class AuditEngine:
-    def __init__(self, checks: List[Check], remote_executor: Optional[object] = None):
-        self.checks = checks
-        self.remote_executor = remote_executor
+    """Runs the enabled checks for the executor's platform against one host."""
 
-    def run(self, hostname: str, platform: str) -> List[Finding]:
+    def __init__(self, checks: Iterable[Check], command_timeout: int = 60) -> None:
+        self.checks = list(checks)
+        self.command_timeout = command_timeout
+
+    def applicable_checks(self, platform: str) -> List[Check]:
+        return [check for check in self.checks if check.platform == platform and check.enabled]
+
+    def run(self, executor: Executor, hostname: str) -> List[Finding]:
+        checks = self.applicable_checks(executor.platform)
+        implemented = [check for check in checks if check.implemented]
+
+        if implemented:
+            try:
+                executor.connect()
+            except Exception as exc:
+                # Connect once up front: if the host is unreachable, report every
+                # check as ERROR instead of retrying the connection per check.
+                log.error("Could not connect to %s: %s", hostname, exc)
+                return [
+                    check.make_finding(hostname, Status.ERROR, f"Could not connect to host: {exc}")
+                    if check.implemented
+                    else check.run(executor, hostname)
+                    for check in checks
+                ]
+
         findings = []
-        for check in self.checks:
-            if check.platform == platform:
-                finding = check.run(hostname)
-                if self.remote_executor is not None:
-                    finding.description = f"{finding.description} | remote output: {self.remote_executor.run_command('echo connected')}"
-                findings.append(finding)
+        for check in checks:
+            log.info("Running %s (%s)", check.id, check.name)
+            findings.append(check.run(executor, hostname, timeout=self.command_timeout))
         return findings
-
-
-def build_default_checks() -> List[Check]:
-    from audit_tool.registry import build_registry
-
-    return build_registry().get_all()
-
-
-def build_checks_from_config(config_path: str | None = None) -> List[Check]:
-    if not config_path:
-        return build_default_checks()
-
-    path = Path(config_path)
-    if not path.exists():
-        return build_default_checks()
-
-    with path.open("r", encoding="utf-8") as handle:
-        payload = json.load(handle)
-
-    checks = payload.get("checks", [])
-    return [
-        Check(
-            name=item.get("name", "Unnamed check"),
-            platform=item.get("platform", "linux"),
-            description=item.get("description", ""),
-            severity=item.get("severity", "medium"),
-        )
-        for item in checks
-    ]

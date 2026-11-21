@@ -1,41 +1,150 @@
 from __future__ import annotations
 
 import argparse
+import logging
+import os
+import sys
+from typing import Iterable, List, Optional
 
-from audit_tool.engine import AuditEngine, build_checks_from_config
-from audit_tool.reports import export_findings
-from audit_tool.remote import RemoteConnection, RemoteExecutor
+from audit_tool.config import ConfigError, apply_config, load_config
+from audit_tool.engine import AuditEngine
+from audit_tool.executors import PLATFORMS, TRANSPORTS, WINRM_TRANSPORTS, build_executor
+from audit_tool.models import Finding, Severity, Status
+from audit_tool.registry import build_registry
+from audit_tool.reports import FORMATS, export_findings
+
+# Exit codes, so the tool can gate CI/CD pipelines.
+EXIT_OK = 0  # no failed checks at or above --fail-on
+EXIT_FINDINGS = 1  # at least one failed check at or above --fail-on
+EXIT_USAGE = 2  # bad arguments or config (also argparse's own code)
+EXIT_INCOMPLETE = 3  # no qualifying failures, but some checks errored
+
+PASSWORD_ENV = "AUDIT_PASSWORD"
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Run infrastructure audit checks")
-    parser.add_argument("--host", default="localhost", help="Target hostname or IP (default: localhost)")
-    parser.add_argument("--platform", choices=["linux", "windows"], default="linux", help="Target platform")
-    parser.add_argument("--format", choices=["text", "json", "markdown"], default="text", help="Output format")
-    parser.add_argument("--output", help="Optional path to write the report")
-    parser.add_argument("--config", help="Optional path to a JSON configuration file")
-    parser.add_argument("--username", help="Optional remote username")
-    parser.add_argument("--port", type=int, default=22, help="Remote SSH port (default: 22)")
-    args = parser.parse_args()
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Run infrastructure audit checks",
+        epilog=(
+            f"Passwords are read from the {PASSWORD_ENV} environment variable, never from arguments. "
+            "Exit codes: 0 clean, 1 failed checks, 2 usage/config error, 3 incomplete (checks errored)."
+        ),
+    )
+    target = parser.add_argument_group("target")
+    target.add_argument("--host", default="localhost", help="Target hostname or IP (default: localhost)")
+    target.add_argument(
+        "--platform",
+        choices=PLATFORMS,
+        help="Target platform. Detected automatically for localhost; required for remote hosts with --transport auto",
+    )
+    target.add_argument(
+        "--transport",
+        choices=TRANSPORTS,
+        default="auto",
+        help="auto: local for localhost, ssh for linux, winrm for windows (default: auto)",
+    )
+    target.add_argument("--username", help="Remote username")
+    target.add_argument("--port", type=int, help="Remote port (default: 22 for SSH, 5985/5986 for WinRM)")
+    target.add_argument("--key-file", help="SSH private key file (SSH agent and default keys are also tried)")
+    target.add_argument(
+        "--accept-unknown-host-keys",
+        action="store_true",
+        help="INSECURE: accept SSH host keys not in known_hosts",
+    )
+    target.add_argument("--winrm-transport", choices=WINRM_TRANSPORTS, default="ntlm", help="WinRM auth (default: ntlm)")
+    target.add_argument("--winrm-https", action="store_true", help="Use WinRM over HTTPS (port 5986)")
 
-    checks = build_checks_from_config(args.config)
-    remote_executor = None
-    if args.username or args.host:
-        remote_executor = RemoteExecutor(
-            RemoteConnection(host=args.host, username=args.username, port=args.port, platform=args.platform)
+    run = parser.add_argument_group("run")
+    run.add_argument("--config", help="JSON config with per-check overrides (see sample_config.json)")
+    run.add_argument("--timeout", type=int, help="Per-command timeout in seconds (default: 60, or from config)")
+    run.add_argument(
+        "--fail-on",
+        choices=Severity.ALL,
+        default=Severity.LOW,
+        help="Lowest severity of failed check that causes exit code 1 (default: low)",
+    )
+    run.add_argument("--list-checks", action="store_true", help="List available checks and exit")
+    run.add_argument("-v", "--verbose", action="store_true", help="Log progress to stderr")
+
+    output = parser.add_argument_group("output")
+    output.add_argument("--format", choices=FORMATS, default="text", help="Report format (default: text)")
+    output.add_argument("--output", help="Write the report to this file instead of stdout")
+    return parser
+
+
+def exit_code_for(findings: Iterable[Finding], fail_on: str) -> int:
+    findings = list(findings)
+    threshold = Severity.RANK[fail_on]
+    if any(f.status == Status.FAIL and Severity.RANK[f.severity] >= threshold for f in findings):
+        return EXIT_FINDINGS
+    if any(f.status == Status.ERROR for f in findings):
+        return EXIT_INCOMPLETE
+    return EXIT_OK
+
+
+def _list_checks(checks) -> None:
+    for check in checks:
+        state = "implemented" if check.implemented else "planned"
+        if not check.enabled:
+            state += ", disabled"
+        print(f"{check.id:14} {check.platform:8} {check.severity:7} {check.name} [{state}]")
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    args = build_parser().parse_args(argv)
+    logging.basicConfig(
+        level=logging.INFO if args.verbose else logging.WARNING,
+        format="%(levelname)s %(name)s: %(message)s",
+    )
+
+    checks = build_registry().get_all()
+    timeout = 60
+    if args.config:
+        try:
+            config = load_config(args.config)
+            checks = apply_config(checks, config)
+        except ConfigError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return EXIT_USAGE
+        timeout = config.get("command_timeout", timeout)
+    if args.timeout is not None:
+        if args.timeout <= 0:
+            print("error: --timeout must be positive", file=sys.stderr)
+            return EXIT_USAGE
+        timeout = args.timeout
+
+    if args.list_checks:
+        _list_checks(checks)
+        return EXIT_OK
+
+    try:
+        executor = build_executor(
+            host=args.host,
+            platform=args.platform,
+            transport=args.transport,
+            username=args.username,
+            password=os.environ.get(PASSWORD_ENV),
+            port=args.port,
+            key_file=args.key_file,
+            accept_unknown_host_keys=args.accept_unknown_host_keys,
+            winrm_transport=args.winrm_transport,
+            winrm_https=args.winrm_https,
+            command_timeout=timeout,
         )
-    engine = AuditEngine(checks, remote_executor=remote_executor)
-    findings = engine.run(hostname=args.host, platform=args.platform)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_USAGE
 
-    if args.format == "text":
-        print(f"Audit results for {args.host} ({args.platform})")
-        print(f"Checks executed: {len(findings)}")
-        for finding in findings:
-            print(f"- [{finding.severity}] {finding.name}: {finding.status}")
+    with executor:
+        findings = AuditEngine(checks, command_timeout=timeout).run(executor, hostname=args.host)
+
+    rendered = export_findings(findings, output_format=args.format, output_file=args.output)
+    if args.output:
+        print(f"Report written to {args.output}", file=sys.stderr)
     else:
-        rendered = export_findings(findings, output_format=args.format, output_file=args.output)
         print(rendered)
+    return exit_code_for(findings, args.fail_on)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

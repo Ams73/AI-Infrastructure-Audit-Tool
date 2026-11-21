@@ -1,16 +1,18 @@
 {
-  "checks": [
-    {
-      "name": "SSH hardening review",
-      "platform": "linux",
-      "description": "Ensure SSH is configured securely.",
-      "severity": "high"
+  "command_timeout": 60,
+  "checks": {
+    "LNX-DISK-001": {
+      "params": { "warn_percent": 75, "fail_percent": 90 }
     },
-    {
-      "name": "Firewall profile status review",
-      "platform": "windows",
-      "description": "Ensure firewall profiles are enabled.",
-      "severity": "medium"
+    "LNX-SSH-001": {
+      "params": { "allow_root_key_login": false }
+    },
+    "WIN-DEF-001": {
+      "severity": "high",
+      "params": { "max_signature_age_days": 3 }
+    },
+    "WIN-TASK-001": {
+      "enabled": false
     }
-  ]
+  }
 }

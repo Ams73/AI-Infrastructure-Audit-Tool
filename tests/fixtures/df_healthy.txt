@@ -1,0 +1,15 @@
+Filesystem     1024-blocks     Used Available Capacity Mounted on
+udev               4010644        0   4010644       0% /dev
+tmpfs               808172     1652    806520       1% /run
+/dev/sda2         61611820 24519484  33930176      42% /
+tmpfs              4040856        0   4040856       0% /dev/shm
+/dev/loop0           65536    65536         0     100% /snap/core20/2105
+/dev/sda1           523248     6220    517028       2% /boot/efi
+/dev/sdb1        103081248 51234567  46588293      53% /srv/data files
+__INODES__
+Filesystem      Inodes  IUsed   IFree IUse% Mounted on
+udev           1002661    532 1002129    1% /dev
+/dev/sda2      3932160 412345 3519815   11% /
+/dev/loop0       11789  11789       0  100% /snap/core20/2105
+/dev/sda1            0      0       0     - /boot/efi
+/dev/sdb1      6553600  20000 6533600    1% /srv/data files

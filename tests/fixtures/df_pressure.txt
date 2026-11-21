@@ -1,0 +1,7 @@
+Filesystem     1024-blocks     Used Available Capacity Mounted on
+/dev/sda2         61611820 57000000  1475000      95% /
+/dev/sdb1        103081248 85000000 12838293      84% /var
+__INODES__
+Filesystem      Inodes  IUsed   IFree IUse% Mounted on
+/dev/sda2      3932160 412345 3519815   11% /
+/dev/sdb1      6553600 6200000 353600   95% /var

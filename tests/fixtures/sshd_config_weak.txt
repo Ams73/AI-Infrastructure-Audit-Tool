@@ -1,0 +1,17 @@
+# source: /etc/ssh/sshd_config
+#	$OpenBSD: sshd_config,v 1.104 2021/07/02 05:11:21 dtucker Exp $
+
+Include /etc/ssh/sshd_config.d/*.conf
+
+#Port 22
+PermitRootLogin yes
+#PasswordAuthentication no
+PermitEmptyPasswords no
+ChallengeResponseAuthentication no
+UsePAM yes
+X11Forwarding yes
+Subsystem	sftp	/usr/lib/openssh/sftp-server
+
+Match User backup
+	PermitRootLogin no
+	PasswordAuthentication no
