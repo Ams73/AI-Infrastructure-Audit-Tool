@@ -23,6 +23,16 @@ class LocalExecutorTests(unittest.TestCase):
     def test_reports_nonzero_exit_code(self):
         self.assertEqual(LocalExecutor().run("exit 3", timeout=30).exit_code, 3)
 
+    def test_secrets_are_not_passed_to_commands(self):
+        if current_platform() == "windows":
+            command = 'Write-Output "[$env:AUDIT_PASSWORD][$env:AUDIT_WEB_PASSWORD][$env:AUDIT_TEST_VISIBLE]"'
+        else:
+            command = 'echo "[$AUDIT_PASSWORD][$AUDIT_WEB_PASSWORD][$AUDIT_TEST_VISIBLE]"'
+        env = {"AUDIT_PASSWORD": "s3cret", "AUDIT_WEB_PASSWORD": "web-s3cret", "AUDIT_TEST_VISIBLE": "visible"}
+        with mock.patch.dict("os.environ", env):
+            output = LocalExecutor().run(command, timeout=30).stdout
+        self.assertIn("[][][visible]", output)
+
     def test_timeout_raises_execution_error(self):
         command = "Start-Sleep -Seconds 10" if current_platform() == "windows" else "sleep 10"
         with self.assertRaises(ExecutionError):

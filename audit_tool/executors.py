@@ -8,6 +8,7 @@ for a result.
 from __future__ import annotations
 
 import logging
+import os
 import shlex
 import subprocess
 import sys
@@ -29,6 +30,8 @@ log = logging.getLogger(__name__)
 
 LOCAL_HOSTNAMES = frozenset({"localhost", "127.0.0.1", "::1"})
 TRANSPORTS = ("auto", "local", "ssh", "winrm")
+# Never passed on to commands run by LocalExecutor.
+SECRET_ENV_VARS = frozenset({"AUDIT_PASSWORD", "AUDIT_WEB_PASSWORD"})
 WINRM_TRANSPORTS = ("ntlm", "kerberos", "credssp", "basic")
 
 # Keeps PowerShell progress records out of stderr and makes output UTF-8.
@@ -87,6 +90,7 @@ class LocalExecutor(Executor):
                 capture_output=True,
                 timeout=timeout,
                 stdin=subprocess.DEVNULL,
+                env={key: value for key, value in os.environ.items() if key not in SECRET_ENV_VARS},
                 check=False,
             )
         except subprocess.TimeoutExpired as exc:

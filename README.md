@@ -46,7 +46,7 @@ python run_audit.py --host web01 --platform linux --username auditor --format ma
 
 # Audit a Windows host over WinRM (password from the environment, never the command line)
 export AUDIT_PASSWORD='...'
-python run_audit.py --host win01 --platform windows --username 'CORPuditor' --winrm-https
+python run_audit.py --host win01 --platform windows --username 'CORP\auditor' --winrm-https
 ```
 
 Exit codes: `0` no failed checks, `1` failed checks at or above `--fail-on` (default `low`),
@@ -75,12 +75,18 @@ python -m unittest discover
 
 ## Run the web UI
 
+The web UI requires a login and can only audit hosts from a configured list:
+
 ```bash
-python -m uvicorn web.app:app --reload
+export AUDIT_WEB_USERNAME=auditor
+export AUDIT_WEB_PASSWORD='at-least-12-characters'
+export AUDIT_WEB_TARGETS='localhost, web01:linux:svc_audit, win01:windows:CORP\svc_audit'
+python -m uvicorn web.app:app
 ```
 
-Then open http://127.0.0.1:8000/ in your browser. The web UI has no authentication yet and
-can connect to hosts with the server's credentials, so keep it bound to localhost.
+Then open http://127.0.0.1:8000/. Until the username and password are set, the UI stays locked.
+Logins use HTTP Basic, so serve it over HTTPS (`--ssl-certfile`/`--ssl-keyfile`) if it is reachable
+from anywhere other than localhost. See [INSTALL_AND_RUN.md](INSTALL_AND_RUN.md#6-run-the-web-ui).
 
 ## Build a release artifact
 

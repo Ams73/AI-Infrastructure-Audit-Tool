@@ -122,19 +122,57 @@ python run_audit.py --host win01 --platform windows --username auditor --winrm-h
 
 ## 6. Run the web UI
 
-The web UI launch command is the same on Windows and Linux.
+### 6.1 Configure it
+
+The web UI reads its settings from environment variables. It stays locked (HTTP 503) until a
+username and a password of at least 12 characters are set.
+
+| Variable | Purpose |
+| --- | --- |
+| `AUDIT_WEB_USERNAME` | Login name for the web UI |
+| `AUDIT_WEB_PASSWORD` | Login password (12+ characters) |
+| `AUDIT_WEB_TARGETS` | Hosts the UI may audit: comma-separated `host:platform[:username]` |
+| `AUDIT_PASSWORD` | Password the server uses to connect to targets (optional with SSH keys) |
+
+Example `AUDIT_WEB_TARGETS`: `localhost, web01:linux:svc_audit, win01:windows:CORP\svc_audit`.
+`localhost` may omit the platform. Use host names, not IPv6 addresses.
+
+PowerShell:
+
+```powershell
+$env:AUDIT_WEB_USERNAME = "auditor"
+$env:AUDIT_WEB_PASSWORD = "at-least-12-characters"
+$env:AUDIT_WEB_TARGETS = "localhost, web01:linux:svc_audit"
+```
+
+Linux:
 
 ```bash
-python -m uvicorn web.app:app --reload
+export AUDIT_WEB_USERNAME=auditor
+export AUDIT_WEB_PASSWORD='at-least-12-characters'
+export AUDIT_WEB_TARGETS='localhost, web01:linux:svc_audit'
 ```
 
-Then open the browser at:
+### 6.2 Start it
 
-```
-http://127.0.0.1:8000/
+```bash
+python -m uvicorn web.app:app
 ```
 
-Use the web form to start an audit and view results in the browser.
+Then open `http://127.0.0.1:8000/`, sign in, pick a target and run the audit.
+
+### 6.3 Security notes
+
+- Users can only pick from `AUDIT_WEB_TARGETS`. They cannot enter a host name, so the UI cannot
+  be used to send the server's SSH keys or `AUDIT_PASSWORD` to a host of their choosing.
+- The audit form carries an anti-CSRF token, and responses send headers that block framing,
+  caching and content sniffing.
+- Only one audit runs at a time; further requests get HTTP 429 until it finishes.
+- Logins use HTTP Basic, which sends the password with every request. If the UI is reachable
+  from anything other than localhost, serve it over HTTPS:
+  `python -m uvicorn web.app:app --host 0.0.0.0 --ssl-certfile cert.pem --ssl-keyfile key.pem`.
+- Failed logins are logged with the attempted username. There is no lockout yet, so keep the UI
+  on a trusted network.
 
 ## 7. Run the demo script (Windows)
 
@@ -161,4 +199,4 @@ Artifacts will be generated in the `dist/` folder.
 
 - If a host cannot be reached, its checks are reported as `error`, never as `pass`.
 - Use `sample_config.json` as a starting point for custom check configuration.
-- The web UI has no authentication yet; keep it bound to localhost.
+- Secrets in `AUDIT_PASSWORD` and `AUDIT_WEB_PASSWORD` are not passed on to the commands the tool runs locally.

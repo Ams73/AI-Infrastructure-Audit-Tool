@@ -9,6 +9,10 @@ Breaking changes to the CLI, config format and report schema.
   passwordless accounts (`WIN-ADM-001`), patch currency (`WIN-UPD-001`), BitLocker (`WIN-BL-001`).
 - Disk check ignores read-only mounts, which are full by design.
 - Errors caused by missing privileges include a hint to run as root/Administrator.
+- Web UI security: HTTP Basic login (locked until configured), targets restricted to
+  `AUDIT_WEB_TARGETS`, anti-CSRF token, security headers, one audit at a time, API docs disabled.
+- Local check commands no longer inherit `AUDIT_PASSWORD` / `AUDIT_WEB_PASSWORD`.
+- Removed the stale `homepage.html`.
 
 - Checks now run real commands and evaluate their output. Implemented: SSH hardening
   (`LNX-SSH-001`), disk/inode usage (`LNX-DISK-001`), firewall profiles (`WIN-FW-001`),
