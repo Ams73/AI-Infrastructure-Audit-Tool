@@ -63,7 +63,9 @@ def evaluate_admins(result: CommandResult, params: Mapping[str, Any]) -> Evaluat
             label = "FAIL" if is_admin else "WARN"
             role = "administrator account" if is_admin else "account"
             lines.append(f"{label}: enabled {role} '{name}' does not require a password (it may be empty).")
-    return Evaluation(worst_status(statuses), "\n".join(lines))
+    accounts = [str(m.get("Name", "")).split("\\")[-1] for m in members]
+    accounts += [str(u.get("Name", "")) for u in users]
+    return Evaluation(worst_status(statuses), "\n".join(lines), accounts=tuple(a for a in accounts if a))
 
 
 # --- Patch currency -------------------------------------------------------------------

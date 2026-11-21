@@ -66,7 +66,7 @@ class Check:
             enabled=enabled if enabled is not None else self.enabled,
         )
 
-    def make_finding(self, host: str, status: str, evidence: str) -> Finding:
+    def make_finding(self, host: str, status: str, evidence: str, accounts: Iterable[str] = ()) -> Finding:
         if len(evidence) > _EVIDENCE_LIMIT:
             evidence = evidence[:_EVIDENCE_LIMIT] + "\n... (truncated)"
         return Finding(
@@ -80,6 +80,7 @@ class Check:
             evidence=evidence,
             recommendation=self.recommendation,
             timestamp=utc_now_iso(),
+            accounts=sorted(set(accounts)),
         )
 
     def run(self, executor: Executor, host: str, timeout: int = 60) -> Finding:
@@ -101,7 +102,7 @@ class Check:
             if _PERMISSION_ERROR.search(result.stderr + result.stdout + str(exc)):
                 detail += "\nHint: this check needs administrator (Windows) or root (Linux) rights."
             return self.make_finding(host, Status.ERROR, detail)
-        return self.make_finding(host, evaluation.status, evaluation.evidence)
+        return self.make_finding(host, evaluation.status, evaluation.evidence, evaluation.accounts)
 
 
 # --- helpers for evaluators -------------------------------------------------

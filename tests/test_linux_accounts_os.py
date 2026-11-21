@@ -76,6 +76,7 @@ class AccountTests(unittest.TestCase):
         self.assertEqual(evaluation.status, Status.FAIL)
         self.assertIn("other than root have UID 0: toor", evaluation.evidence)
         self.assertIn("empty password: guest", evaluation.evidence)
+        self.assertEqual(set(evaluation.accounts), {"root", "toor", "guest"})
 
     def test_unreadable_shadow_warns(self):
         evaluation = evaluate_accounts(ok("uid0:root\nshadow:unreadable\n"), {})
@@ -111,6 +112,12 @@ class SudoersTests(unittest.TestCase):
         self.assertTrue(any("/etc/sudoers.d/legacy" in line for line in warns))
         self.assertNotIn("commented out", evidence)
         self.assertEqual(len(fails), 4)
+
+    def test_principals_are_reported_for_redaction(self):
+        evaluation = evaluate_sudoers(ok(fixture("sudoers_risky.txt")), self.PARAMS)
+        self.assertEqual(
+            set(evaluation.accounts), {"backup", "ubuntu", "deploy", "jenkins", "%ops", "ansible"}
+        )
 
     def test_allowed_principals_are_accepted(self):
         params = {"allowed_nopasswd": ["ansible", "ubuntu", "%ops"]}

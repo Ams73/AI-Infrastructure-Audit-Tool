@@ -35,6 +35,7 @@ class AdministratorsTests(unittest.TestCase):
         self.assertIn("WARN: built-in Administrator account 'Administrator' is enabled", evidence)
         self.assertIn("FAIL: enabled administrator account 'helpdesk' does not require a password", evidence)
         self.assertIn("WARN: enabled account 'kiosk' does not require a password", evidence)
+        self.assertTrue({"helpdesk", "kiosk", "svc_backup", "Domain Admins"} <= set(evaluation.accounts))
         self.assertNotIn("Guest", evidence.split("members):", 1)[1].split("WARN", 1)[0])  # disabled: ignored
 
     def test_allowed_members_list(self):

@@ -1,9 +1,9 @@
 """Core data types shared by checks, executors, the engine and reports."""
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Dict, List, Tuple
 
 PLATFORMS = ("linux", "windows")
 
@@ -52,6 +52,9 @@ class Evaluation:
 
     status: str
     evidence: str
+    # Account and group names that appear in the evidence. Reported in the
+    # finding and used to pseudonymize them before data leaves the machine.
+    accounts: Tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.status not in Status.ALL:
@@ -72,6 +75,7 @@ class Finding:
     evidence: str
     recommendation: str
     timestamp: str
+    accounts: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

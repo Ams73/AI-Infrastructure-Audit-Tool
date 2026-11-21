@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import argparse
 import logging
+import json
 import os
+import socket
 import sys
 from typing import Iterable, List, Optional
 
+from audit_tool import ai_summary as ai
 from audit_tool.config import ConfigError, apply_config, load_config
 from audit_tool.engine import AuditEngine
 from audit_tool.executors import PLATFORMS, TRANSPORTS, WINRM_TRANSPORTS, build_executor
@@ -66,6 +69,33 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--list-checks", action="store_true", help="List available checks and exit")
     run.add_argument("-v", "--verbose", action="store_true", help="Log progress to stderr")
 
+    summary = parser.add_argument_group(
+        "AI summary (optional; needs the [ai] extra and Anthropic API credentials)"
+    )
+    summary.add_argument(
+        "--ai-summary",
+        action="store_true",
+        help="Add an executive summary and remediation plan written by Claude. Findings are "
+        "redacted before they are sent; see --ai-dry-run",
+    )
+    summary.add_argument("--ai-model", default=ai.DEFAULT_MODEL, help=f"Claude model (default: {ai.DEFAULT_MODEL})")
+    summary.add_argument(
+        "--ai-effort", choices=ai.EFFORT_LEVELS, default=ai.DEFAULT_EFFORT,
+        help=f"Reasoning effort (default: {ai.DEFAULT_EFFORT})",
+    )
+    summary.add_argument(
+        "--ai-evidence", choices=ai.EVIDENCE_MODES, default="redacted",
+        help="Send redacted evidence (default) or none: only check IDs, statuses and descriptions",
+    )
+    summary.add_argument(
+        "--ai-redact", action="append", default=[], metavar="TERM",
+        help="Extra value to replace with a placeholder, e.g. an account or company name (repeatable)",
+    )
+    summary.add_argument(
+        "--ai-dry-run", action="store_true",
+        help="Print the exact redacted data that would be sent to stderr, and send nothing",
+    )
+
     output = parser.add_argument_group("output")
     output.add_argument("--format", choices=FORMATS, default="text", help="Report format (default: text)")
     output.add_argument("--output", help="Write the report to this file instead of stdout")
@@ -88,6 +118,36 @@ def _list_checks(checks) -> None:
         if not check.enabled:
             state += ", disabled"
         print(f"{check.id:14} {check.platform:8} {check.severity:7} {check.name} [{state}]")
+
+
+def _ai_summary(args: argparse.Namespace, findings: List[Finding]) -> "Optional[ai.AISummary]":
+    """Run the optional AI step. Failures are reported but never fail the audit."""
+    if not (args.ai_summary or args.ai_dry_run):
+        return None
+    hosts = [args.host, socket.gethostname()]
+    include_evidence = args.ai_evidence == "redacted"
+    if args.ai_dry_run:
+        redactor = ai.payload_redactor(findings, hosts, args.ai_redact)
+        payload = ai.build_payload(findings, redactor, include_evidence)
+        print("AI dry run: this is the data --ai-summary would send (nothing was sent):", file=sys.stderr)
+        print(json.dumps(payload, indent=2, sort_keys=True), file=sys.stderr)
+        return None
+    try:
+        return ai.summarize(
+            findings,
+            model=args.ai_model,
+            effort=args.ai_effort,
+            include_evidence=include_evidence,
+            hosts=hosts,
+            redact_terms=args.ai_redact,
+        )
+    except ai.AISummaryError as exc:
+        print(f"warning: AI summary skipped: {exc}", file=sys.stderr)
+        return None
+    except Exception as exc:  # the summary is optional: never lose the audit report over it
+        logging.getLogger(__name__).debug("AI summary failed", exc_info=True)
+        print(f"warning: AI summary skipped after an unexpected error: {exc!r}", file=sys.stderr)
+        return None
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -138,7 +198,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     with executor:
         findings = AuditEngine(checks, command_timeout=timeout).run(executor, hostname=args.host)
 
-    rendered = export_findings(findings, output_format=args.format, output_file=args.output)
+    summary = _ai_summary(args, findings)
+    rendered = export_findings(
+        findings, output_format=args.format, output_file=args.output, ai_summary=summary
+    )
     if args.output:
         print(f"Report written to {args.output}", file=sys.stderr)
     else:

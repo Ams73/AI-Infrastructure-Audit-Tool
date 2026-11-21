@@ -133,7 +133,7 @@ def evaluate_accounts(result: CommandResult, params: Mapping[str, Any]) -> Evalu
         lines.append(f"FAIL: accounts with an empty password: {', '.join(empty)}")
     else:
         lines.append("No accounts with an empty password.")
-    return Evaluation(worst_status(statuses), "\n".join(lines))
+    return Evaluation(worst_status(statuses), "\n".join(lines), accounts=tuple(uid0 + empty))
 
 
 # --- Sudoers --------------------------------------------------------------------------
@@ -173,6 +173,7 @@ def evaluate_sudoers(result: CommandResult, params: Mapping[str, Any]) -> Evalua
     allowed = {name.lower() for name in params.get("allowed_nopasswd") or []}
     files, unreadable = [], []
     statuses, findings = [], []
+    principals: List[str] = []
     current = "?"
 
     for line in _logical_lines(result.stdout):
@@ -184,12 +185,16 @@ def evaluate_sudoers(result: CommandResult, params: Mapping[str, Any]) -> Evalua
             unreadable.append(line.split(":", 1)[1].strip())
             continue
         if line.startswith("Defaults") and "!authenticate" in line:
+            scoped = re.match(r"Defaults[:>@!](\S+)", line)
+            if scoped:
+                principals.append(scoped.group(1))
             statuses.append(Status.FAIL)
             findings.append(f"FAIL: {current}: authentication disabled: {line}")
             continue
         if "NOPASSWD:" not in line or "=" not in line:
             continue
         principal = line.split()[0]
+        principals.append(principal)
         if principal.lower() in allowed:
             findings.append(f"allowed: {current}: {line}")
             continue
@@ -210,7 +215,7 @@ def evaluate_sudoers(result: CommandResult, params: Mapping[str, Any]) -> Evalua
         findings.append(f"WARN: could not read: {', '.join(unreadable)} (run as root)")
 
     lines = [f"Files reviewed: {', '.join(files)}"] + (findings or ["No NOPASSWD or !authenticate rules found."])
-    return Evaluation(worst_status(statuses), "\n".join(lines))
+    return Evaluation(worst_status(statuses), "\n".join(lines), accounts=tuple(principals))
 
 
 # --- SSH hardening ------------------------------------------------------------
