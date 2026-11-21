@@ -2,10 +2,216 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Mapping, Tuple
+from datetime import date
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from audit_tool.checks.base import Check, CheckError, worst_status
 from audit_tool.models import CommandResult, Evaluation, Severity, Status
+
+
+def _today() -> date:
+    """Indirection so tests can pin the date."""
+    return date.today()
+
+
+# --- OS version and support status ----------------------------------------------
+
+OS_RELEASE_COMMAND = 'cat /etc/os-release; echo "KERNEL=$(uname -r)"'
+
+# End of vendor security support, keyed by (os-release ID, version key). The
+# version key is VERSION_ID for Ubuntu and the major version elsewhere.
+# Dates come from vendor lifecycle pages. Extend or correct them per site with
+# the "extra_eol_dates" param, e.g. {"ubuntu:26.10": "2027-07-31"}.
+_RHEL_FAMILY_EOL = {"7": "2024-06-30", "8": "2029-05-31", "9": "2032-05-31", "10": "2035-05-31"}
+EOL_DATES: Dict[Tuple[str, str], str] = {
+    ("ubuntu", "16.04"): "2021-04-30",
+    ("ubuntu", "18.04"): "2023-05-31",
+    ("ubuntu", "20.04"): "2025-05-31",
+    ("ubuntu", "22.04"): "2027-06-30",
+    ("ubuntu", "24.04"): "2029-05-31",
+    ("ubuntu", "26.04"): "2031-05-31",
+    ("debian", "9"): "2022-06-30",
+    ("debian", "10"): "2024-06-30",
+    ("debian", "11"): "2026-08-31",
+    ("debian", "12"): "2028-06-30",
+    ("debian", "13"): "2030-06-30",
+    ("centos", "7"): "2024-06-30",
+    ("centos", "8"): "2024-05-31",
+    ("centos", "9"): "2027-05-31",
+    ("amzn", "2"): "2026-06-30",
+    ("amzn", "2023"): "2029-06-30",
+}
+for _distro in ("rhel", "rocky", "almalinux", "ol"):
+    EOL_DATES.update({(_distro, major): eol for major, eol in _RHEL_FAMILY_EOL.items()})
+
+
+def parse_os_release(text: str) -> Dict[str, str]:
+    values = {}
+    for line in text.splitlines():
+        key, sep, value = line.partition("=")
+        if sep and key.strip():
+            values[key.strip()] = value.strip().strip("\"'")
+    return values
+
+
+def _eol_for(distro: str, version_id: str, extra: Mapping[str, str]) -> Optional[Tuple[str, date]]:
+    version_key = version_id if distro == "ubuntu" else version_id.split(".")[0]
+    raw = extra.get(f"{distro}:{version_key}") or EOL_DATES.get((distro, version_key))
+    if raw is None:
+        return None
+    try:
+        return version_key, date.fromisoformat(raw)
+    except ValueError as exc:
+        raise CheckError(f"invalid EOL date {raw!r} for {distro}:{version_key}") from exc
+
+
+def evaluate_os_release(result: CommandResult, params: Mapping[str, Any]) -> Evaluation:
+    info = parse_os_release(result.stdout)
+    distro = info.get("ID", "").lower()
+    if not distro:
+        raise CheckError("/etc/os-release could not be read")
+    version_id = info.get("VERSION_ID", "")
+    lines = [
+        f"OS: {info.get('PRETTY_NAME', distro)}",
+        f"ID={distro} VERSION_ID={version_id or '(none)'}",
+        f"Kernel: {info.get('KERNEL', 'unknown')}",
+    ]
+
+    eol = _eol_for(distro, version_id, params.get("extra_eol_dates") or {}) if version_id else None
+    if eol is None:
+        lines.append(
+            "WARN: release not in the lifecycle table; support status unknown "
+            "(add it with the extra_eol_dates param)."
+        )
+        return Evaluation(Status.WARN, "\n".join(lines))
+
+    _, eol_date = eol
+    days_left = (eol_date - _today()).days
+    if days_left < 0:
+        lines.append(f"FAIL: vendor security support ended on {eol_date} ({-days_left} days ago).")
+        return Evaluation(Status.FAIL, "\n".join(lines))
+    if days_left <= int(params["warn_days_before_eol"]):
+        lines.append(f"WARN: vendor security support ends on {eol_date} ({days_left} days left).")
+        return Evaluation(Status.WARN, "\n".join(lines))
+    lines.append(f"Supported until {eol_date} ({days_left} days left).")
+    return Evaluation(Status.PASS, "\n".join(lines))
+
+
+# --- Privileged and passwordless accounts --------------------------------------------
+
+ACCOUNTS_COMMAND = (
+    "awk -F: '$3 == 0 { print \"uid0:\" $1 }' /etc/passwd; "
+    "if [ -r /etc/shadow ]; then "
+    "awk -F: '$2 == \"\" { print \"emptypw:\" $1 }' /etc/shadow; echo shadow:ok; "
+    "else echo shadow:unreadable; fi"
+)
+
+
+def evaluate_accounts(result: CommandResult, params: Mapping[str, Any]) -> Evaluation:
+    uid0, empty, shadow = [], [], None
+    for line in result.stdout.splitlines():
+        kind, _, value = line.strip().partition(":")
+        if kind == "uid0":
+            uid0.append(value)
+        elif kind == "emptypw":
+            empty.append(value)
+        elif kind == "shadow":
+            shadow = value
+    if shadow is None or not uid0:
+        raise CheckError("could not read /etc/passwd")
+
+    statuses, lines = [], [f"UID 0 accounts: {', '.join(uid0)}"]
+    extra_root = [name for name in uid0 if name != "root"]
+    if extra_root:
+        statuses.append(Status.FAIL)
+        lines.append(f"FAIL: accounts other than root have UID 0: {', '.join(extra_root)}")
+    if shadow == "unreadable":
+        statuses.append(Status.WARN)
+        lines.append("WARN: /etc/shadow is not readable; empty passwords were not checked (run as root).")
+    elif empty:
+        statuses.append(Status.FAIL)
+        lines.append(f"FAIL: accounts with an empty password: {', '.join(empty)}")
+    else:
+        lines.append("No accounts with an empty password.")
+    return Evaluation(worst_status(statuses), "\n".join(lines))
+
+
+# --- Sudoers --------------------------------------------------------------------------
+
+SUDOERS_COMMAND = (
+    "for f in /etc/sudoers /etc/sudoers.d/*; do "
+    '[ -f "$f" ] || continue; '
+    'if [ -r "$f" ]; then echo "# file: $f"; cat "$f"; echo; '
+    'else echo "# unreadable: $f"; fi; '
+    "done"
+)
+
+_SUDO_TAG = re.compile(r"\b[A-Z_]+:")
+_SUDO_PASSWD_TAG = re.compile(r"\bPASSWD:")  # \b keeps it from matching inside NOPASSWD:
+_SUDO_ALL = re.compile(r"(?:^|,)\s*ALL\s*(?:,|$)")
+
+
+def _logical_lines(text: str) -> List[str]:
+    """Join backslash continuations; keep marker lines; drop comments/blanks."""
+    lines, buffer = [], ""
+    for raw in text.splitlines():
+        line = raw.rstrip()
+        if line.startswith("# file:") or line.startswith("# unreadable:"):
+            lines.append(line)
+            continue
+        if line.endswith("\\"):
+            buffer += line[:-1] + " "
+            continue
+        line = (buffer + line).strip()
+        buffer = ""
+        if line and not line.startswith("#") and not line.startswith("@include"):
+            lines.append(line)
+    return lines
+
+
+def evaluate_sudoers(result: CommandResult, params: Mapping[str, Any]) -> Evaluation:
+    allowed = {name.lower() for name in params.get("allowed_nopasswd") or []}
+    files, unreadable = [], []
+    statuses, findings = [], []
+    current = "?"
+
+    for line in _logical_lines(result.stdout):
+        if line.startswith("# file:"):
+            current = line.split(":", 1)[1].strip()
+            files.append(current)
+            continue
+        if line.startswith("# unreadable:"):
+            unreadable.append(line.split(":", 1)[1].strip())
+            continue
+        if line.startswith("Defaults") and "!authenticate" in line:
+            statuses.append(Status.FAIL)
+            findings.append(f"FAIL: {current}: authentication disabled: {line}")
+            continue
+        if "NOPASSWD:" not in line or "=" not in line:
+            continue
+        principal = line.split()[0]
+        if principal.lower() in allowed:
+            findings.append(f"allowed: {current}: {line}")
+            continue
+        # Commands after NOPASSWD: up to a later PASSWD: tag; other tags (SETENV:,
+        # NOEXEC:...) don't change whether a password is needed.
+        commands = _SUDO_PASSWD_TAG.split(line.split("NOPASSWD:", 1)[1])[0]
+        if _SUDO_ALL.search(_SUDO_TAG.sub("", commands)):
+            statuses.append(Status.FAIL)
+            findings.append(f"FAIL: {current}: passwordless sudo for ALL commands: {line}")
+        else:
+            statuses.append(Status.WARN)
+            findings.append(f"WARN: {current}: passwordless sudo for specific commands: {line}")
+
+    if "/etc/sudoers" in unreadable or not (files or unreadable):
+        raise CheckError("/etc/sudoers is not readable; this check must run as root")
+    if unreadable:
+        statuses.append(Status.WARN)
+        findings.append(f"WARN: could not read: {', '.join(unreadable)} (run as root)")
+
+    lines = [f"Files reviewed: {', '.join(files)}"] + (findings or ["No NOPASSWD or !authenticate rules found."])
+    return Evaluation(worst_status(statuses), "\n".join(lines))
+
 
 # --- SSH hardening ------------------------------------------------------------
 
@@ -80,7 +286,8 @@ def evaluate_sshd(result: CommandResult, params: Mapping[str, Any]) -> Evaluatio
             (
                 Status.WARN,
                 "sshd_config uses Include directives that were not resolved; the effective "
-                "configuration may differ. Run the audit as root so 'sshd -T' can be used.",
+                "configuration may differ. 'sshd -T' was unavailable (it needs root and the "
+                "server's host keys).",
             )
         )
 
@@ -92,7 +299,12 @@ def evaluate_sshd(result: CommandResult, params: Mapping[str, Any]) -> Evaluatio
 
 # --- Disk and inode usage -------------------------------------------------------
 
-DISK_COMMAND = "df -P; echo __INODES__; df -P -i 2>/dev/null || true"
+# Read-only mounts (images, ISOs, erofs) are full by design, so they are listed
+# from /proc/mounts and excluded.
+DISK_COMMAND = (
+    "df -P; echo __INODES__; df -P -i 2>/dev/null || true; "
+    "echo __READONLY__; awk '$4 ~ /(^|,)ro(,|$)/ { print $2 }' /proc/mounts 2>/dev/null || true"
+)
 
 _IGNORED_FILESYSTEMS = {"tmpfs", "devtmpfs", "overlay", "squashfs", "udev", "none", "shm", "efivarfs"}
 _IGNORED_MOUNT_ROOTS = ("/proc", "/sys", "/dev", "/run", "/snap")
@@ -126,14 +338,23 @@ def evaluate_disk(result: CommandResult, params: Mapping[str, Any]) -> Evaluatio
     if warn_at > fail_at:
         raise CheckError(f"warn_percent ({warn_at}) must not exceed fail_percent ({fail_at})")
 
-    blocks_text, _, inodes_text = result.stdout.partition("__INODES__")
-    blocks = parse_df(blocks_text)
+    blocks_text, _, rest = result.stdout.partition("__INODES__")
+    inodes_text, _, readonly_text = rest.partition("__READONLY__")
+    # /proc/mounts escapes spaces and other characters as octal (e.g.  ).
+    readonly = {
+        re.sub(r"\\([0-7]{3})", lambda m: chr(int(m.group(1), 8)), line.strip())
+        for line in readonly_text.splitlines()
+        if line.strip()
+    }
+    blocks = [entry for entry in parse_df(blocks_text) if entry[0] not in readonly]
     if not blocks:
-        raise CheckError("no filesystems found in df output")
-    inodes = parse_df(inodes_text)
+        raise CheckError("no writable filesystems found in df output")
+    inodes = [entry for entry in parse_df(inodes_text) if entry[0] not in readonly]
 
     statuses = []
     lines = [f"Thresholds: warn at {warn_at}%, fail at {fail_at}%"]
+    if readonly:
+        lines.append(f"Ignored read-only mounts: {', '.join(sorted(readonly))}")
     for label, entries in (("space", blocks), ("inodes", inodes)):
         for mount, percent in entries:
             status = Status.FAIL if percent >= fail_at else Status.WARN if percent >= warn_at else Status.PASS
@@ -151,7 +372,27 @@ LINUX_CHECKS = [
         name="OS version and distribution verification",
         platform="linux",
         severity=Severity.HIGH,
-        description="Verify the operating system version and distribution.",
+        description="Identify the distribution and release and verify it still receives vendor security updates.",
+        recommendation=(
+            "Upgrade to a supported release of the distribution, or buy extended support "
+            "(e.g. Ubuntu Pro, Debian ELTS, RHEL ELS) until the upgrade is done."
+        ),
+        command=OS_RELEASE_COMMAND,
+        evaluate=evaluate_os_release,
+        params={"warn_days_before_eol": 180, "extra_eol_dates": {}},
+    ),
+    Check(
+        id="LNX-ACCT-001",
+        name="Privileged and passwordless account review",
+        platform="linux",
+        severity=Severity.HIGH,
+        description="Find accounts other than root with UID 0 and accounts with an empty password.",
+        recommendation=(
+            "Remove or renumber extra UID 0 accounts and use sudo for privilege instead. "
+            "Lock accounts with empty passwords (passwd -l <user>) or set a password."
+        ),
+        command=ACCOUNTS_COMMAND,
+        evaluate=evaluate_accounts,
     ),
     Check(
         id="LNX-SSH-001",
@@ -172,7 +413,15 @@ LINUX_CHECKS = [
         name="Sudoers misconfiguration review",
         platform="linux",
         severity=Severity.HIGH,
-        description="Check for unsafe sudoers rules and NOPASSWD usage.",
+        description="Check sudoers for passwordless (NOPASSWD) rules and disabled authentication.",
+        recommendation=(
+            "Remove NOPASSWD from rules granting ALL commands and remove '!authenticate' defaults. "
+            "Limit passwordless rules to specific commands for automation accounts and list those "
+            "accounts in the allowed_nopasswd param. Edit with visudo."
+        ),
+        command=SUDOERS_COMMAND,
+        evaluate=evaluate_sudoers,
+        params={"allowed_nopasswd": []},
     ),
     Check(
         id="LNX-FS-001",

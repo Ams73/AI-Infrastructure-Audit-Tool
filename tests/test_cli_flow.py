@@ -10,22 +10,24 @@ from pathlib import Path
 from unittest import mock
 
 from audit_tool import cli
-from audit_tool.checks.linux import DISK_COMMAND, SSHD_COMMAND
+from audit_tool.checks.linux import LINUX_CHECKS
 from audit_tool.executors import ExecutionError
-from tests.fakes import FakeExecutor, fixture, ok
+from tests.fakes import FIXTURE_DATE, FakeExecutor, clean_linux_responses
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+IMPLEMENTED_LINUX = sum(1 for check in LINUX_CHECKS if check.implemented)
 
 
 def linux_executor(disk_fixture="df_healthy.txt", **kwargs):
-    responses = {
-        SSHD_COMMAND: ok(fixture("sshd_T_hardened.txt")),
-        DISK_COMMAND: ok(fixture(disk_fixture)),
-    }
-    return FakeExecutor(platform="linux", responses=responses, **kwargs)
+    return FakeExecutor(platform="linux", responses=clean_linux_responses(disk_fixture), **kwargs)
 
 
 class CliTests(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch("audit_tool.checks.linux._today", return_value=FIXTURE_DATE)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def run_cli(self, argv, executor=None):
         stdout, stderr = io.StringIO(), io.StringIO()
         with redirect_stdout(stdout), redirect_stderr(stderr):
@@ -41,7 +43,8 @@ class CliTests(unittest.TestCase):
         code, out, _ = self.run_cli(["--host", "web01", "--platform", "linux"], linux_executor())
         self.assertEqual(code, cli.EXIT_OK)
         self.assertIn("Audit results for web01 (linux)", out)
-        self.assertIn("[SKIPPED] [high  ] LNX-OS-001", out)
+        self.assertIn("[PASS   ] [high  ] LNX-OS-001", out)
+        self.assertIn("[SKIPPED] [medium] LNX-CRON-001", out)
 
     def test_failed_check_exits_one_and_respects_fail_on(self):
         argv = ["--host", "web01", "--platform", "linux"]
@@ -56,7 +59,7 @@ class CliTests(unittest.TestCase):
         code, out, _ = self.run_cli(["--host", "web01", "--platform", "linux", "--format", "json"], executor)
         self.assertEqual(code, cli.EXIT_INCOMPLETE)
         payload = json.loads(out)
-        self.assertEqual(payload["summary"]["by_status"]["error"], 2)
+        self.assertEqual(payload["summary"]["by_status"]["error"], IMPLEMENTED_LINUX)
         self.assertEqual(payload["summary"]["by_status"]["pass"], 0)
 
     def test_password_comes_from_environment(self):

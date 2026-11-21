@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional
 
@@ -11,6 +12,7 @@ from audit_tool.models import PLATFORMS, CommandResult, Evaluation, Finding, Sev
 Evaluator = Callable[[CommandResult, Mapping[str, Any]], Evaluation]
 
 _EVIDENCE_LIMIT = 2000
+_PERMISSION_ERROR = re.compile(r"access (is )?denied|permission denied|must run as root|requires? root", re.I)
 
 
 class CheckError(Exception):
@@ -93,8 +95,11 @@ class Check:
             evaluation = self.evaluate(result, self.params)
         except Exception as exc:
             detail = f"Could not evaluate command output: {exc}"
-            if result.stderr.strip():
-                detail += f"\nstderr: {result.stderr.strip()}"
+            stderr = result.stderr.strip()
+            if stderr and stderr[:200] not in detail:
+                detail += f"\nstderr: {stderr}"
+            if _PERMISSION_ERROR.search(result.stderr + result.stdout + str(exc)):
+                detail += "\nHint: this check needs administrator (Windows) or root (Linux) rights."
             return self.make_finding(host, Status.ERROR, detail)
         return self.make_finding(host, evaluation.status, evaluation.evidence)
 

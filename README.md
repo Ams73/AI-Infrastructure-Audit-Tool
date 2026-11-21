@@ -11,9 +11,19 @@ The tool currently provides:
 - exit codes suitable for CI/CD gating
 - a lightweight browser UI for running audits
 
-**Status:** the framework is in place; 4 of the 60 planned checks are implemented
-(`LNX-SSH-001`, `LNX-DISK-001`, `WIN-FW-001`, `WIN-DEF-001`). The remaining checks are
-listed and report `skipped` until implemented. Run `python run_audit.py --list-checks`.
+**Status:** 10 of the 60 planned checks are implemented, 5 per platform:
+
+| Linux | Windows |
+| --- | --- |
+| `LNX-OS-001` OS release and vendor support (EOL) | `WIN-UPD-001` Patch currency and pending reboot |
+| `LNX-ACCT-001` Extra UID 0 and empty-password accounts | `WIN-ADM-001` Administrators group and passwordless accounts |
+| `LNX-SSH-001` SSH daemon hardening | `WIN-FW-001` Firewall profiles |
+| `LNX-SUDO-001` NOPASSWD and `!authenticate` sudo rules | `WIN-DEF-001` Microsoft Defender status |
+| `LNX-DISK-001` Disk space and inode usage | `WIN-BL-001` BitLocker protection |
+
+The remaining checks are listed and report `skipped` until implemented. Run
+`python run_audit.py --list-checks`. Run audits as root / Administrator: `LNX-SUDO-001`,
+`WIN-BL-001` and parts of other checks cannot see everything otherwise and will say so.
 
 For a complete install and run walkthrough, see [INSTALL_AND_RUN.md](INSTALL_AND_RUN.md).
 

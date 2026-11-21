@@ -4,6 +4,12 @@
 
 Breaking changes to the CLI, config format and report schema.
 
+- Added checks: OS release support/EOL (`LNX-OS-001`), UID 0 and empty-password accounts
+  (`LNX-ACCT-001`), sudoers NOPASSWD rules (`LNX-SUDO-001`), Administrators group and
+  passwordless accounts (`WIN-ADM-001`), patch currency (`WIN-UPD-001`), BitLocker (`WIN-BL-001`).
+- Disk check ignores read-only mounts, which are full by design.
+- Errors caused by missing privileges include a hint to run as root/Administrator.
+
 - Checks now run real commands and evaluate their output. Implemented: SSH hardening
   (`LNX-SSH-001`), disk/inode usage (`LNX-DISK-001`), firewall profiles (`WIN-FW-001`),
   Microsoft Defender status (`WIN-DEF-001`). Other checks report `skipped` instead of `passed`.

@@ -1,0 +1,2 @@
+uid0:root
+shadow:ok

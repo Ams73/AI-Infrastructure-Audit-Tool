@@ -3,8 +3,7 @@ from unittest import mock
 
 from fastapi.testclient import TestClient
 
-from audit_tool.checks.linux import DISK_COMMAND, SSHD_COMMAND
-from tests.fakes import FakeExecutor, fixture, ok
+from tests.fakes import FakeExecutor, clean_linux_responses
 from web.app import app
 
 
@@ -18,12 +17,7 @@ class WebAppTests(unittest.TestCase):
         self.assertIn("Run Audit", response.text)
 
     def test_run_audit_endpoint(self):
-        executor = FakeExecutor(
-            responses={
-                SSHD_COMMAND: ok(fixture("sshd_T_hardened.txt")),
-                DISK_COMMAND: ok(fixture("df_pressure.txt")),
-            }
-        )
+        executor = FakeExecutor(responses=clean_linux_responses("df_pressure.txt"))
         with mock.patch("web.app.build_executor", return_value=executor):
             response = self.client.post("/run", data={"host": "web01", "platform": "linux"})
         self.assertEqual(response.status_code, 200)

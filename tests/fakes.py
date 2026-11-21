@@ -1,6 +1,7 @@
 """Test doubles: an executor that replays recorded command output."""
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
@@ -19,6 +20,23 @@ def ok(stdout: str) -> CommandResult:
 
 
 Response = Union[CommandResult, Exception]
+
+# Date at which the recorded fixtures were evaluated; patch
+# audit_tool.checks.linux._today with it so EOL results don't drift over time.
+FIXTURE_DATE = date(2026, 11, 22)
+
+
+def clean_linux_responses(disk_fixture: str = "df_healthy.txt") -> Dict[str, Response]:
+    """Recorded output of a healthy Linux host for every implemented Linux check."""
+    from audit_tool.checks import linux
+
+    return {
+        linux.OS_RELEASE_COMMAND: ok(fixture("os_release_ubuntu2204.txt")),
+        linux.ACCOUNTS_COMMAND: ok(fixture("accounts_clean.txt")),
+        linux.SSHD_COMMAND: ok(fixture("sshd_T_hardened.txt")),
+        linux.SUDOERS_COMMAND: ok(fixture("sudoers_ubuntu_default.txt")),
+        linux.DISK_COMMAND: ok(fixture(disk_fixture)),
+    }
 
 
 class FakeExecutor(Executor):

@@ -1,11 +1,23 @@
 {
   "command_timeout": 60,
   "checks": {
+    "LNX-OS-001": {
+      "params": {
+        "warn_days_before_eol": 180,
+        "extra_eol_dates": { "ubuntu:26.10": "2027-07-31" }
+      }
+    },
+    "LNX-SUDO-001": {
+      "params": { "allowed_nopasswd": ["ansible"] }
+    },
     "LNX-DISK-001": {
       "params": { "warn_percent": 75, "fail_percent": 90 }
     },
-    "LNX-SSH-001": {
-      "params": { "allow_root_key_login": false }
+    "WIN-ADM-001": {
+      "params": { "allowed_members": [], "max_members": 3 }
+    },
+    "WIN-UPD-001": {
+      "params": { "warn_days": 35, "fail_days": 60 }
     },
     "WIN-DEF-001": {
       "severity": "high",
