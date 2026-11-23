@@ -25,6 +25,9 @@ dev = [
     "build",
 ]
 
+[project.scripts]
+infra-audit = "audit_tool.cli:main"
+
 [build-system]
 requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
@@ -34,4 +37,5 @@ testpaths = ["tests"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["audit_tool*", "web*"]
+# Only the audit_tool package is installed. web/ is a source-checkout shim.
+include = ["audit_tool*"]

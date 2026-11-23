@@ -63,7 +63,9 @@ python -m pip install -e ".[web,ai]"
 
 ## 5. Run the CLI
 
-The command syntax is the same on Windows and Linux.
+The command syntax is the same on Windows and Linux. The installed package also provides the
+same CLI as the `infra-audit` command, so `infra-audit --list-checks` is equivalent to
+`python run_audit.py --list-checks` (useful when installed from a wheel, without the repository).
 
 ### Audit the local machine
 
@@ -112,8 +114,9 @@ python run_audit.py --host win01 --platform windows --username auditor --winrm-h
 | --- | --- |
 | 0 | No failed checks at or above `--fail-on` |
 | 1 | At least one failed check at or above `--fail-on` |
-| 2 | Invalid arguments or configuration |
+| 2 | Invalid arguments or configuration, or the report file could not be written (the report is then printed to stdout) |
 | 3 | No qualifying failures, but some checks could not run (`error`) |
+| 130 | Interrupted with Ctrl+C |
 
 ## 6. Run the web UI
 
@@ -151,8 +154,10 @@ export AUDIT_WEB_TARGETS='localhost, web01:linux:svc_audit'
 ### 6.2 Start it
 
 ```bash
-python -m uvicorn web.app:app
+python -m uvicorn audit_tool.web:app
 ```
+
+(The older `python -m uvicorn web.app:app` still works from a source checkout.)
 
 Then open `http://127.0.0.1:8000/`, sign in, pick a target and run the audit.
 
@@ -165,7 +170,7 @@ Then open `http://127.0.0.1:8000/`, sign in, pick a target and run the audit.
 - Only one audit runs at a time; further requests get HTTP 429 until it finishes.
 - Logins use HTTP Basic, which sends the password with every request. If the UI is reachable
   from anything other than localhost, serve it over HTTPS:
-  `python -m uvicorn web.app:app --host 0.0.0.0 --ssl-certfile cert.pem --ssl-keyfile key.pem`.
+  `python -m uvicorn audit_tool.web:app --host 0.0.0.0 --ssl-certfile cert.pem --ssl-keyfile key.pem`.
 - Failed logins are logged with the attempted username. There is no lockout yet, so keep the UI
   on a trusted network.
 

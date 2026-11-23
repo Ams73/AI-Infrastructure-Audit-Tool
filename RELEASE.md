@@ -25,8 +25,9 @@ Install the wheel into a clean virtual environment and run it:
 ```bash
 python -m venv /tmp/release-check && . /tmp/release-check/bin/activate
 python -m pip install "dist/ai_infrastructure_audit_tool-<version>-py3-none-any.whl[web,ai]"
-python -m audit_tool --list-checks
-python -m audit_tool --format markdown   # audits the local machine
+infra-audit --list-checks
+infra-audit --format markdown            # audits the local machine
+python -c "import audit_tool.web"        # the web UI imports from the installed package
 ```
 
 ## 3. Publish

@@ -1,3 +1,4 @@
+import time
 import unittest
 from types import SimpleNamespace
 from unittest import mock
@@ -106,26 +107,112 @@ class SSHExecutorTests(unittest.TestCase):
             with self.assertRaises(ExecutionError):
                 SSHExecutor("web01").connect()
 
-    def test_session_is_reused_and_commands_run_via_sh(self):
+    def run_with_channels(self, *channels, timeout=30):
         fake = _fake_paramiko()
         client = fake.SSHClient.return_value
-        stdout = mock.MagicMock()
-        stdout.read.return_value = b"out"
-        stdout.channel.recv_exit_status.return_value = 2
-        stderr = mock.MagicMock()
-        stderr.read.return_value = b"err"
-        client.exec_command.return_value = (mock.MagicMock(), stdout, stderr)
-
+        client.get_transport.return_value.open_session.side_effect = list(channels)
         with mock.patch("audit_tool.executors.paramiko", fake):
             executor = SSHExecutor("web01")
-            first = executor.run("echo 'a b'")
-            executor.run("true")
+            results = []
+            for _ in channels:
+                try:
+                    results.append(executor.run("echo 'a b'", timeout=timeout))
+                except ExecutionError as exc:
+                    results.append(exc)
             executor.close()
+        return fake, client, results
 
+    def test_session_is_reused_and_commands_run_via_sh(self):
+        fake, client, results = self.run_with_channels(
+            FakeChannel(stdout=b"out", stderr=b"err", exit_code=2), FakeChannel(stdout=b"ok")
+        )
+        first = results[0]
         self.assertEqual(fake.SSHClient.call_count, 1)
         self.assertEqual((first.exit_code, first.stdout, first.stderr), (2, "out", "err"))
-        self.assertEqual(client.exec_command.call_args_list[0].args[0], "/bin/sh -c 'echo '\"'\"'a b'\"'\"''")
+        self.assertEqual(results[1].stdout, "ok")
+        self.assertEqual(client.get_transport.return_value.open_session.call_count, 2)
         client.close.assert_called_once()
+
+    def test_command_is_quoted_for_sh_and_channel_is_closed(self):
+        channel = FakeChannel(stdout=b"x")
+        self.run_with_channels(channel)
+        self.assertEqual(channel.command, "/bin/sh -c 'echo '\"'\"'a b'\"'\"''")
+        self.assertTrue(channel.write_shut and channel.closed)
+
+    def test_large_stderr_before_stdout_does_not_deadlock(self):
+        # Models SSH flow control: stdout only arrives once stderr has been read.
+        # Reading stdout to the end first (the old behavior) would wait forever.
+        stderr = b"find: Permission denied\n" * 200_000  # ~4.8 MB
+        channel = FakeChannel(stdout=b"result", stderr=stderr, stdout_after_stderr=True)
+        _, _, results = self.run_with_channels(channel, timeout=10)
+        self.assertEqual(results[0].stdout, "result")
+        self.assertEqual(len(results[0].stderr), len(stderr))
+
+    def test_overall_timeout_is_enforced(self):
+        channel = FakeChannel(stdout=b"", never_finishes=True)
+        started = time.monotonic()
+        _, _, results = self.run_with_channels(channel, timeout=1)
+        self.assertIsInstance(results[0], ExecutionError)
+        self.assertIn("timed out after 1s", str(results[0]))
+        self.assertLess(time.monotonic() - started, 5)
+        self.assertTrue(channel.closed)
+
+    def test_dropped_connection_fails_fast(self):
+        channel = FakeChannel(stdout=b"", dropped=True)
+        _, _, results = self.run_with_channels(channel, timeout=30)
+        self.assertIsInstance(results[0], ExecutionError)
+        self.assertIn("closed before the command finished", str(results[0]))
+
+
+class FakeChannel:
+    """Minimal stand-in for paramiko.Channel's non-blocking read API."""
+
+    def __init__(self, stdout=b"", stderr=b"", exit_code=0, stdout_after_stderr=False,
+                 never_finishes=False, dropped=False):
+        self._stdout, self._stderr = bytearray(stdout), bytearray(stderr)
+        self._exit_code = exit_code
+        self._stdout_after_stderr = stdout_after_stderr
+        self._never_finishes = never_finishes
+        self.command = None
+        self.write_shut = False
+        self.closed = dropped
+        self._dropped = dropped
+        self.eof_received = False
+
+    def exec_command(self, command):
+        self.command = command
+
+    def shutdown_write(self):
+        self.write_shut = True
+
+    def recv_ready(self):
+        if self._stdout_after_stderr and self._stderr:
+            return False
+        return bool(self._stdout)
+
+    def recv(self, size):
+        chunk, self._stdout[:] = bytes(self._stdout[:size]), self._stdout[size:]
+        return chunk
+
+    def recv_stderr_ready(self):
+        return bool(self._stderr)
+
+    def recv_stderr(self, size):
+        chunk, self._stderr[:] = bytes(self._stderr[:size]), self._stderr[size:]
+        return chunk
+
+    def exit_status_ready(self):
+        if self._never_finishes or self._dropped:
+            return False
+        done = not self._stdout and not self._stderr
+        self.eof_received = done
+        return done
+
+    def recv_exit_status(self):
+        return self._exit_code
+
+    def close(self):
+        self.closed = True
 
 
 def _ps_result(code=0, out=b"5", err=b""):

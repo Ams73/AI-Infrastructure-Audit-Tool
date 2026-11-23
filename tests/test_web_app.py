@@ -4,7 +4,7 @@ from unittest import mock
 from fastapi.testclient import TestClient
 
 from tests.fakes import FIXTURE_DATE, FakeExecutor, clean_linux_responses
-from web.app import SECURITY_HEADERS, Target, WebSettings, create_app, parse_targets
+from audit_tool.web import SECURITY_HEADERS, Target, WebSettings, create_app, parse_targets
 
 USER, PASSWORD = "auditor", "correct-horse-battery"
 AUTH = (USER, PASSWORD)
@@ -107,7 +107,7 @@ class AuditFormTests(unittest.TestCase):
     def test_runs_audit_on_selected_target(self):
         client, settings, _ = make_client()
         executor = FakeExecutor(responses=clean_linux_responses("df_pressure.txt"))
-        with mock.patch("web.app.build_executor", return_value=executor) as build:
+        with mock.patch("audit_tool.web.build_executor", return_value=executor) as build:
             response = client.post("/run", auth=AUTH, data={"target": "1", "csrf_token": settings.csrf_token})
         self.assertEqual(response.status_code, 200)
         self.assertIn("[FAIL] LNX-DISK-001", response.text)
@@ -117,7 +117,7 @@ class AuditFormTests(unittest.TestCase):
 
     def test_csrf_token_required(self):
         client, _, _ = make_client()
-        with mock.patch("web.app.build_executor") as build:
+        with mock.patch("audit_tool.web.build_executor") as build:
             for token in (None, "", "forged"):
                 data = {"target": "1"} if token is None else {"target": "1", "csrf_token": token}
                 with self.subTest(token=token):
@@ -126,7 +126,7 @@ class AuditFormTests(unittest.TestCase):
 
     def test_unknown_targets_rejected(self):
         client, settings, _ = make_client()
-        with mock.patch("web.app.build_executor") as build:
+        with mock.patch("audit_tool.web.build_executor") as build:
             for target in ("2", "-1", "abc", "²", "", "web01"):
                 with self.subTest(target=target):
                     data = {"target": target, "csrf_token": settings.csrf_token}
@@ -137,7 +137,7 @@ class AuditFormTests(unittest.TestCase):
         client, settings, app = make_client()
         app.state.audit_lock.acquire()
         try:
-            with mock.patch("web.app.build_executor") as build:
+            with mock.patch("audit_tool.web.build_executor") as build:
                 response = client.post("/run", auth=AUTH, data={"target": "0", "csrf_token": settings.csrf_token})
             self.assertEqual(response.status_code, 429)
             build.assert_not_called()
@@ -146,7 +146,7 @@ class AuditFormTests(unittest.TestCase):
 
     def test_lock_released_after_failure(self):
         client, settings, app = make_client()
-        with mock.patch("web.app.build_executor", side_effect=ValueError("bad target")):
+        with mock.patch("audit_tool.web.build_executor", side_effect=ValueError("bad target")):
             response = client.post("/run", auth=AUTH, data={"target": "0", "csrf_token": settings.csrf_token})
         self.assertEqual(response.status_code, 400)
         self.assertFalse(app.state.audit_lock.locked())

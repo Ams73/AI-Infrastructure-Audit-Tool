@@ -15,6 +15,9 @@ report schema.
   `evidence`, `recommendation`, `timestamp` and `accounts`; statuses are `pass`, `warn`,
   `fail`, `error` and `skipped` instead of `passed`.
 - The web UI needs `AUDIT_WEB_USERNAME`, `AUDIT_WEB_PASSWORD` and `AUDIT_WEB_TARGETS`.
+- The web UI moved into the package: run it with `uvicorn audit_tool.web:app`. Installing the
+  package no longer adds a top-level `web` module to site-packages (`web.app` still works from
+  a source checkout).
 
 ### Added
 
@@ -36,6 +39,8 @@ report schema.
 - Strict config validation: unknown check IDs, keys and parameters are errors.
 - Errors caused by missing privileges include a hint to run as root/Administrator.
 - `requirements_ai.txt`, and `[web]`/`[ai]` extras in `pyproject.toml`.
+- `infra-audit` command installed with the package.
+- Exit code 130 on Ctrl+C instead of a traceback.
 
 ### Changed
 
@@ -44,7 +49,7 @@ report schema.
 - Reports list the findings that need attention first, with evidence and recommendations.
 - The disk check ignores read-only mounts, which are full by design.
 - CI installs the package with its extras and actually runs the tests, on Python 3.9, 3.12 and
-  3.13 (Linux) and 3.12 (Windows); `ubuntu-latest` no longer provides Python 3.9.
+  3.15 (Linux) and 3.15 (Windows); `ubuntu-latest` no longer provides Python 3.9.
 - New `[dev]` extra with test and build tools.
 
 ### Security
@@ -62,6 +67,12 @@ report schema.
 - `python -m unittest discover` ran 0 tests, so CI never tested anything.
 - The `[web]` extra was missing `python-multipart`, so a fresh install crashed when starting
   the web UI (newer FastAPI releases no longer install it).
+- SSH commands could hang forever when a command wrote a lot to stderr (stdout and stderr are
+  now read together), and slowly-trickling output could exceed `--timeout` (the timeout now
+  bounds the whole command). A dropped connection fails immediately.
+- An unwritable `--output` path crashed after the audit and lost the report; the report is now
+  printed to stdout and the exit code is 2.
+- `--port` outside 1-65535 and non-positive `--timeout` values are rejected as usage errors.
 
 ### Removed
 

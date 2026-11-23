@@ -162,6 +162,30 @@ class CliTests(unittest.TestCase):
         )
         self.assertIn("web01", kwargs["hosts"])
 
+    def test_unwritable_output_keeps_report_and_fails(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            missing_dir = os.path.join(tmpdir, "no-such-dir", "report.md")
+            code, out, err = self.run_cli(
+                ["--host", "web01", "--platform", "linux", "--format", "markdown", "--output", missing_dir],
+                linux_executor(),
+            )
+        self.assertEqual(code, cli.EXIT_USAGE)
+        self.assertIn("could not write the report", err)
+        self.assertIn("# Audit Report", out)  # the audit isn't lost
+
+    def test_invalid_port_and_timeout_are_usage_errors(self):
+        for argv in (["--port", "0"], ["--port", "70000"], ["--port", "abc"], ["--timeout", "0"]):
+            with self.subTest(argv=argv), self.assertRaises(SystemExit) as ctx:
+                with redirect_stderr(io.StringIO()):
+                    cli.main(["--host", "web01", "--platform", "linux", *argv])
+            self.assertEqual(ctx.exception.code, cli.EXIT_USAGE)
+
+    def test_ctrl_c_exits_cleanly(self):
+        with mock.patch("audit_tool.cli.AuditEngine.run", side_effect=KeyboardInterrupt):
+            code, _, err = self.run_cli(["--host", "web01", "--platform", "linux"], linux_executor())
+        self.assertEqual(code, cli.EXIT_INTERRUPTED)
+        self.assertIn("interrupted", err)
+
     def test_entry_point_script_runs(self):
         completed = subprocess.run(
             [sys.executable, "run_audit.py", "--list-checks"],

@@ -12,6 +12,7 @@ import os
 import shlex
 import subprocess
 import sys
+import time
 from typing import Optional
 
 from audit_tool.models import PLATFORMS, CommandResult
@@ -33,6 +34,9 @@ TRANSPORTS = ("auto", "local", "ssh", "winrm")
 # Never passed on to commands run by LocalExecutor.
 SECRET_ENV_VARS = frozenset({"AUDIT_PASSWORD", "AUDIT_WEB_PASSWORD"})
 WINRM_TRANSPORTS = ("ntlm", "kerberos", "credssp", "basic")
+
+_SSH_CHUNK = 65536
+_SSH_POLL_SECONDS = 0.02
 
 # Keeps PowerShell progress records out of stderr and makes output UTF-8.
 _PS_PREAMBLE = (
@@ -176,14 +180,51 @@ class SSHExecutor(Executor):
         wrapped = f"/bin/sh -c {shlex.quote(command)}"
         log.debug("ssh %s: running %r", self.host, command)
         try:
-            stdin, stdout, stderr = self._client.exec_command(wrapped, timeout=timeout)
-            stdin.close()
-            out = stdout.read().decode("utf-8", errors="replace")
-            err = stderr.read().decode("utf-8", errors="replace")
-            exit_code = stdout.channel.recv_exit_status()
+            channel = self._client.get_transport().open_session(timeout=self.connect_timeout)
+        except (paramiko.SSHException, OSError, AttributeError) as exc:
+            raise ExecutionError(f"could not open an SSH channel on {self.host}: {exc}") from exc
+        try:
+            channel.exec_command(wrapped)
+            channel.shutdown_write()
+            out, err = self._collect(channel, timeout)
+            exit_code = channel.recv_exit_status()
         except (paramiko.SSHException, OSError) as exc:
-            raise ExecutionError(f"command failed on {self.host}: {str(exc) or 'timed out'}") from exc
-        return CommandResult(exit_code=exit_code, stdout=out, stderr=err)
+            raise ExecutionError(f"command failed on {self.host}: {str(exc) or 'connection error'}") from exc
+        finally:
+            channel.close()
+        return CommandResult(
+            exit_code=exit_code,
+            stdout=out.decode("utf-8", errors="replace"),
+            stderr=err.decode("utf-8", errors="replace"),
+        )
+
+    def _collect(self, channel, timeout: int):
+        """Read stdout and stderr together until the command ends.
+
+        Reading one stream to the end before the other can deadlock: both share
+        the SSH flow-control window, so a command that fills stderr while we wait
+        on stdout stalls forever. The deadline bounds the whole command, not just
+        gaps between output.
+        """
+        deadline = time.monotonic() + timeout
+        out, err = bytearray(), bytearray()
+        while True:
+            progressed = False
+            if channel.recv_ready():
+                out += channel.recv(_SSH_CHUNK)
+                progressed = True
+            if channel.recv_stderr_ready():
+                err += channel.recv_stderr(_SSH_CHUNK)
+                progressed = True
+            if progressed:
+                continue
+            if channel.exit_status_ready() and (channel.eof_received or channel.closed):
+                return bytes(out), bytes(err)
+            if channel.closed:
+                raise ExecutionError(f"the SSH connection to {self.host} closed before the command finished")
+            if time.monotonic() >= deadline:
+                raise ExecutionError(f"command timed out after {timeout}s on {self.host}")
+            time.sleep(_SSH_POLL_SECONDS)
 
     def close(self) -> None:
         if self._client is not None:
