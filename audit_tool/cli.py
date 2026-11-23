@@ -19,10 +19,25 @@ from audit_tool.reports import FORMATS, export_findings
 # Exit codes, so the tool can gate CI/CD pipelines.
 EXIT_OK = 0  # no failed checks at or above --fail-on
 EXIT_FINDINGS = 1  # at least one failed check at or above --fail-on
-EXIT_USAGE = 2  # bad arguments or config (also argparse's own code)
+EXIT_USAGE = 2  # bad arguments or config, or the report file could not be written
 EXIT_INCOMPLETE = 3  # no qualifying failures, but some checks errored
+EXIT_INTERRUPTED = 130  # Ctrl+C, the shell convention
 
 PASSWORD_ENV = "AUDIT_PASSWORD"
+
+
+def _port(value: str) -> int:
+    port = int(value)
+    if not 1 <= port <= 65535:
+        raise argparse.ArgumentTypeError(f"port must be between 1 and 65535, got {port}")
+    return port
+
+
+def _positive_int(value: str) -> int:
+    number = int(value)
+    if number <= 0:
+        raise argparse.ArgumentTypeError(f"must be a positive number of seconds, got {number}")
+    return number
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -47,7 +62,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="auto: local for localhost, ssh for linux, winrm for windows (default: auto)",
     )
     target.add_argument("--username", help="Remote username")
-    target.add_argument("--port", type=int, help="Remote port (default: 22 for SSH, 5985/5986 for WinRM)")
+    target.add_argument("--port", type=_port, help="Remote port (default: 22 for SSH, 5985/5986 for WinRM)")
     target.add_argument("--key-file", help="SSH private key file (SSH agent and default keys are also tried)")
     target.add_argument(
         "--accept-unknown-host-keys",
@@ -59,7 +74,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     run = parser.add_argument_group("run")
     run.add_argument("--config", help="JSON config with per-check overrides (see sample_config.json)")
-    run.add_argument("--timeout", type=int, help="Per-command timeout in seconds (default: 60, or from config)")
+    run.add_argument("--timeout", type=_positive_int, help="Per-command timeout in seconds (default: 60, or from config)")
     run.add_argument(
         "--fail-on",
         choices=Severity.ALL,
@@ -151,7 +166,25 @@ def _ai_summary(args: argparse.Namespace, findings: List[Finding]) -> "Optional[
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    args = build_parser().parse_args(argv)
+    try:
+        return _run(build_parser().parse_args(argv))
+    except KeyboardInterrupt:
+        print("\ninterrupted", file=sys.stderr)
+        return EXIT_INTERRUPTED
+
+
+def _write_report(path: str, rendered: str) -> bool:
+    try:
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(rendered)
+    except OSError as exc:
+        print(f"error: could not write the report to {path}: {exc}", file=sys.stderr)
+        return False
+    print(f"Report written to {path}", file=sys.stderr)
+    return True
+
+
+def _run(args: argparse.Namespace) -> int:
     logging.basicConfig(
         level=logging.INFO if args.verbose else logging.WARNING,
         format="%(levelname)s %(name)s: %(message)s",
@@ -168,9 +201,6 @@ def main(argv: Optional[List[str]] = None) -> int:
             return EXIT_USAGE
         timeout = config.get("command_timeout", timeout)
     if args.timeout is not None:
-        if args.timeout <= 0:
-            print("error: --timeout must be positive", file=sys.stderr)
-            return EXIT_USAGE
         timeout = args.timeout
 
     if args.list_checks:
@@ -199,12 +229,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         findings = AuditEngine(checks, command_timeout=timeout).run(executor, hostname=args.host)
 
     summary = _ai_summary(args, findings)
-    rendered = export_findings(
-        findings, output_format=args.format, output_file=args.output, ai_summary=summary
-    )
-    if args.output:
-        print(f"Report written to {args.output}", file=sys.stderr)
-    else:
+    rendered = export_findings(findings, output_format=args.format, ai_summary=summary)
+    if args.output and not _write_report(args.output, rendered):
+        # Don't lose an audit that already ran: fall back to stdout, but fail the
+        # run so pipelines notice the missing file.
+        print(rendered)
+        return EXIT_USAGE
+    if not args.output:
         print(rendered)
     return exit_code_for(findings, args.fail_on)
 

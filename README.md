@@ -56,7 +56,11 @@ python run_audit.py --host win01 --platform windows --username 'CORP\auditor' --
 ```
 
 Exit codes: `0` no failed checks, `1` failed checks at or above `--fail-on` (default `low`),
-`2` usage or config error, `3` no failures but some checks could not run (`error`).
+`2` usage or config error, or the report file could not be written, `3` no failures but some
+checks could not run (`error`), `130` interrupted with Ctrl+C.
+
+Installed from a wheel or with `pip install -e .`, the same CLI is also available as the
+`infra-audit` command (`infra-audit --list-checks`).
 
 Many checks need elevated rights (for example `sshd -T` needs root); otherwise they fall back
 to less precise data or report `error`.
@@ -98,7 +102,7 @@ python -m pip install -e ".[web,ai,dev]"
 python -m unittest discover
 ```
 
-CI runs the suite on Python 3.9, 3.12 and 3.13 on Linux and 3.12 on Windows.
+CI runs the suite on Python 3.9, 3.12 and 3.15 on Linux and 3.15 on Windows.
 
 ## Run the web UI
 
@@ -108,7 +112,7 @@ The web UI requires a login and can only audit hosts from a configured list:
 export AUDIT_WEB_USERNAME=auditor
 export AUDIT_WEB_PASSWORD='at-least-12-characters'
 export AUDIT_WEB_TARGETS='localhost, web01:linux:svc_audit, win01:windows:CORP\svc_audit'
-python -m uvicorn web.app:app
+python -m uvicorn audit_tool.web:app
 ```
 
 Then open http://127.0.0.1:8000/. Until the username and password are set, the UI stays locked.
